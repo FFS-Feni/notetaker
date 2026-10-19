@@ -1,0 +1,28 @@
+name: notetaker
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: notetaker
+      POSTGRES_PASSWORD: notetaker
+      POSTGRES_DB: notetaker
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notetaker -d notetaker"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:1025:1025"
+
+volumes:
+  pgdata:
