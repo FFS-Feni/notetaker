@@ -1,0 +1,659 @@
+<title>Карта Notetaker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Unbounded:wght@600&display=swap">
+<style>
+/* Тёмный холст в точку, как в n8n: узлы-карточки по группам (браузер → API → БД → worker → почта), данные бегут по линиям слева направо */
+:root{
+  color-scheme:dark;
+  --bg:#121419; --dot:#272b34; --panel:#191c22; --panel2:#20242b; --node:#22262d; --line:#363b46; --edge:#4a505d; --edge-in:#666d7c;
+  --fg:#e9ebf0; --muted:#9097a6;
+  --br:#5cb0ee; --api:#f0a93e; --db:#47c2a2; --wk:#e7799e; --ml:#ad9ff7;
+  --ok:#5bd38f; --ok-ink:#0b2616;
+  --f-d:"Unbounded",system-ui,sans-serif; --f-b:"Manrope",system-ui,sans-serif; --f-m:"JetBrains Mono",ui-monospace,monospace;
+}
+.g-br{--c:var(--br)} .g-api{--c:var(--api)} .g-db{--c:var(--db)} .g-wk{--c:var(--wk)} .g-ml{--c:var(--ml)}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-b);font-size:14px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0}
+.app{height:100%;box-sizing:border-box;padding-block:14px 16px;display:grid;grid-template-columns:minmax(0,1fr) 380px;grid-template-rows:auto minmax(0,1fr);gap:12px 16px}
+header{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 24px}
+h1{font-family:var(--f-d);font-weight:600;font-size:20px;letter-spacing:-.01em;margin:0 0 4px}
+header p{margin:0;color:var(--muted);max-width:62ch}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font:500 11.5px var(--f-m);color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:9px;height:9px;border-radius:3px;background:var(--c)}
+
+/* холст */
+.stage{position:relative;overflow:hidden;min-height:0;border:1px solid var(--line);border-radius:14px;background-color:var(--bg);
+  background-image:radial-gradient(var(--dot) 1.2px,transparent 1.4px);background-size:22px 22px;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+.stage.grabbing{cursor:grabbing}
+#world{position:absolute;left:0;top:0;width:1900px;height:1120px;transform-origin:0 0}
+.stage.smooth #world{transition:transform .65s cubic-bezier(.3,.7,.2,1)}
+.stage.smooth{transition:background-position .65s cubic-bezier(.3,.7,.2,1),background-size .65s cubic-bezier(.3,.7,.2,1)}
+#edges{position:absolute;left:0;top:0;overflow:visible}
+#nodes{position:absolute;inset:0}
+.grp rect{fill:color-mix(in srgb,var(--c) 4%,transparent);stroke:color-mix(in srgb,var(--c) 38%,transparent);stroke-width:1.2;stroke-dasharray:6 6}
+.grp text{fill:var(--c);font:500 12px var(--f-m);letter-spacing:.08em;text-transform:uppercase}
+.edge{fill:none;stroke:var(--edge);stroke-width:2;transition:opacity .3s,stroke .3s}
+.edge.in{stroke:var(--edge-in)}
+.edge.dim{opacity:.16}
+.edge.on{stroke:var(--c);stroke-width:2.6;stroke-dasharray:8 6;animation:flow .6s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-14}}
+.mk-idle{fill:var(--edge-in)} .mk-br{fill:var(--br)} .mk-api{fill:var(--api)} .mk-db{fill:var(--db)} .mk-wk{fill:var(--wk)} .mk-ml{fill:var(--ml)}
+.elbl rect{fill:var(--panel2);stroke:var(--line)}
+.elbl text{fill:var(--muted);font:500 11px var(--f-m)}
+.elbl{transition:opacity .3s} .elbl.dim{opacity:.16}
+#pk{fill:var(--c);filter:drop-shadow(0 0 7px var(--c))}
+
+.node{position:absolute;width:60px;height:60px;cursor:pointer;transition:opacity .3s;outline:none}
+.node .box{box-sizing:border-box;width:60px;height:60px;border-radius:12px;background:var(--node);border:1.5px solid var(--line);display:grid;place-items:center;color:var(--c);transition:border-color .25s,box-shadow .25s}
+.node.trig .box{border-radius:30px 12px 12px 30px}
+.node.if .box{background:color-mix(in srgb,var(--c) 10%,var(--node))}
+.node .box svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.node::before,.node::after{content:"";position:absolute;top:26px;width:8px;height:8px;border-radius:50%;background:var(--panel2);border:1.5px solid var(--line);box-sizing:border-box}
+.node::before{left:-4px} .node::after{right:-4px}
+.node.trig::before{display:none}
+.node .lbl{position:absolute;top:66px;left:50%;transform:translateX(-50%);width:150px;text-align:center;display:grid;gap:1px;pointer-events:none}
+.node .lbl b{font-weight:600;font-size:12.5px;line-height:1.25;text-wrap:balance}
+.node .lbl span{font:400 10.5px var(--f-m);color:var(--muted)}
+.node .ok{display:none;position:absolute;top:-7px;right:-7px;width:18px;height:18px;border-radius:50%;background:var(--ok);color:var(--ok-ink);place-items:center}
+.node .ok svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.node.dim{opacity:.26}
+.node.done .ok{display:grid}
+.node.done .box{border-color:color-mix(in srgb,var(--c) 55%,var(--line))}
+.node.act .box{border-color:var(--c);box-shadow:0 0 0 4px color-mix(in srgb,var(--c) 22%,transparent),0 0 26px color-mix(in srgb,var(--c) 45%,transparent)}
+.node.sel .box,.node:focus-visible .box{outline:2px solid var(--fg);outline-offset:3px}
+
+.caption{position:absolute;left:12px;right:12px;top:12px;display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:10px;
+  background:color-mix(in srgb,var(--panel) 92%,transparent);border:1px solid var(--line);backdrop-filter:blur(6px);max-width:620px}
+.caption .no{flex:none;font:500 11px var(--f-m);color:var(--bg);background:var(--fg);border-radius:6px;padding:2px 7px;margin-top:1px;font-variant-numeric:tabular-nums}
+.caption .tx{min-width:0;text-wrap:pretty}
+.zoom{position:absolute;right:12px;bottom:12px;display:flex;gap:6px}
+.zoom button,.btn{font:inherit;color:var(--fg);background:var(--panel2);border:1px solid var(--line);border-radius:9px;cursor:pointer}
+.zoom button{width:36px;height:36px;font-size:17px;line-height:1}
+.hint{position:absolute;left:12px;bottom:14px;font:400 11px var(--f-m);color:var(--muted);pointer-events:none;max-width:calc(100% - 170px)}
+button:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+button:hover{border-color:var(--edge-in)}
+
+.info{position:absolute;left:12px;bottom:12px;width:min(340px,calc(100% - 24px));box-sizing:border-box;padding:14px 16px;border-radius:12px;background:var(--panel);border:1px solid var(--line);box-shadow:0 12px 40px rgb(0 0 0 / .45);cursor:auto}
+.info .x{position:absolute;right:8px;top:8px;width:30px;height:30px;font-size:18px;line-height:1;color:var(--muted);background:none;border:0;cursor:pointer;border-radius:8px}
+.info .grp-l{display:inline-flex;align-items:center;gap:6px;font:500 11px var(--f-m);color:var(--c);text-transform:uppercase;letter-spacing:.06em}
+.info .grp-l i{width:8px;height:8px;border-radius:3px;background:var(--c)}
+.info h3{margin:6px 0 2px;font-size:16px;padding-right:24px}
+.info .sub{font:400 11.5px var(--f-m);color:var(--muted);margin:0 0 8px}
+.info p{margin:0 0 10px}
+.info dl{margin:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;font-size:12.5px}
+.info dt{color:var(--muted)} .info dd{margin:0;overflow-wrap:anywhere}
+.info dd.m{font-family:var(--f-m);font-size:11.5px}
+
+/* панель */
+.panel{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:12px;padding-right:2px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+.card h2{margin:0 0 10px;font:500 11px var(--f-m);color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:500 12.5px var(--f-b);padding:6px 10px;border-radius:999px;color:var(--fg);background:var(--panel2);border:1px solid var(--line);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.sdesc{margin:12px 0 0;color:var(--fg)}
+.proves{margin:8px 0 0;font-size:12.5px;color:var(--muted)}
+.proves b{color:var(--ok);font-weight:600}
+.ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{padding:8px 12px;font-weight:600}
+.btn.primary{background:var(--fg);color:var(--bg);border-color:var(--fg);min-width:132px}
+.btn:disabled{opacity:.4;cursor:default}
+.row2{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;margin-top:12px;font-size:12.5px;color:var(--muted)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{font:500 12px var(--f-m);padding:5px 9px;background:var(--panel2);color:var(--muted);border:0;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--edge);color:var(--fg)}
+.follow{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.prog{font:500 12px var(--f-m);color:var(--muted);font-variant-numeric:tabular-nums;margin-left:auto}
+ol.steps{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+ol.steps button{width:100%;text-align:left;display:grid;grid-template-columns:26px minmax(0,1fr);gap:2px 8px;padding:8px 10px;border-radius:9px;border:1px solid transparent;background:none;color:var(--muted);font:inherit;cursor:pointer}
+ol.steps button:hover{background:var(--panel2)}
+ol.steps .no{grid-row:span 2;font:500 11px var(--f-m);text-align:center;border-radius:6px;padding:2px 0;height:fit-content;background:var(--panel2);border:1px solid var(--line);font-variant-numeric:tabular-nums}
+ol.steps .pth{font:400 10.5px var(--f-m);color:var(--muted);opacity:.8;min-width:0;overflow-wrap:anywhere}
+ol.steps .tx{min-width:0}
+ol.steps button.done{color:var(--fg)}
+ol.steps button.done .no{background:var(--ok);color:var(--ok-ink);border-color:var(--ok)}
+ol.steps button.cur{color:var(--fg);background:var(--panel2);border-color:var(--edge)}
+ol.steps button.cur .no{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.foot{font-size:12px;color:var(--muted);margin:0;padding:0 4px}
+
+@media (min-width:861px){ body{overflow:hidden} }
+@media (max-width:860px){
+  html,body{height:auto}
+  .app{height:auto;display:flex;flex-direction:column}
+  .stage{height:64svh;min-height:380px}
+  .panel{overflow:visible}
+  .hint{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .edge.on{animation:none}
+  .stage.smooth #world,.stage.smooth{transition:none}
+}
+</style>
+
+<div class="app">
+  <header>
+    <div>
+      <h1>Карта Notetaker</h1>
+      <p>Как данные ходят между вкладками браузера, сервером, базой и фоновым процессом. Выбери сценарий и нажми «Запустить».</p>
+    </div>
+    <div class="legend" id="legend"></div>
+  </header>
+
+  <main class="stage" id="stage" aria-label="Схема системы">
+    <div id="world"><svg id="edges" aria-hidden="true"></svg><div id="nodes"></div></div>
+    <div class="caption" id="caption"><span class="no" id="capNo">—</span><span class="tx" id="capTx"></span></div>
+    <div class="hint">Тяни — двигать · колесо или щипок — масштаб · клик по узлу — подробности</div>
+    <div class="zoom">
+      <button type="button" id="zIn" aria-label="Приблизить">+</button>
+      <button type="button" id="zOut" aria-label="Отдалить">−</button>
+      <button type="button" id="zFit" aria-label="Показать всю схему">⤢</button>
+    </div>
+    <div class="info g-api" id="info" hidden>
+      <button type="button" class="x" id="infoX" aria-label="Закрыть">×</button>
+      <span class="grp-l"><i></i><span id="iG"></span></span>
+      <h3 id="iT"></h3>
+      <p class="sub" id="iS"></p>
+      <p id="iD"></p>
+      <dl id="iDl"></dl>
+    </div>
+  </main>
+
+  <aside class="panel">
+    <section class="card">
+      <h2>Сценарий</h2>
+      <div class="chips" id="chips"></div>
+      <p class="sdesc" id="sdesc"></p>
+      <p class="proves" id="proves"></p>
+    </section>
+    <section class="card">
+      <div class="ctl">
+        <button type="button" class="btn primary" id="bPlay">▶ Запустить</button>
+        <button type="button" class="btn" id="bPrev" aria-label="Шаг назад">←</button>
+        <button type="button" class="btn" id="bNext" aria-label="Шаг вперёд">→</button>
+        <button type="button" class="btn" id="bReset">Сначала</button>
+      </div>
+      <div class="row2">
+        <div class="seg" role="group" aria-label="Скорость">
+          <button type="button" data-sp="0.5">0.5×</button><button type="button" data-sp="1" aria-pressed="true">1×</button><button type="button" data-sp="2">2×</button>
+        </div>
+        <label class="follow"><input type="checkbox" id="follow" checked> Камера за шагом</label>
+        <span class="prog" id="prog"></span>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Шаги</h2>
+      <ol class="steps" id="steps"></ol>
+    </section>
+    <p class="foot">Схема построена по docs/ARCHITECTURE.md. Кода ещё нет: пути к файлам — где они будут.</p>
+  </aside>
+</div>
+
+<script>
+const GROUPS={br:'Браузер · React',api:'Backend · FastAPI',db:'PostgreSQL',wk:'Worker · фоновый процесс',ml:'Почта · заглушка'};
+
+const IC={
+  win:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M6.5 6.5h.01M9.5 6.5h.01"/>',
+  edit:'<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/>',
+  refresh:'<path d="M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.5 4.5L20 16M20 20v-4h-4"/>',
+  cal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M7.5 14h3M13.5 14h3M7.5 17.5h3"/>',
+  bell:'<path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4l2-2zM10 20.5a2 2 0 0 0 4 0"/>',
+  api:'<path d="M8 6l-5 6 5 6M16 6l5 6-5 6M14 4l-4 16"/>',
+  lock:'<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  split:'<path d="M3 12h6M9 12l4-6h7M9 12l4 6h7"/><path d="M17.5 3.5L20 6l-2.5 2.5M17.5 15.5L20 18l-2.5 2.5"/>',
+  layers:'<path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 12.5l9 5 9-5"/><path d="M3 16.5l9 5 9-5"/>',
+  warn:'<path d="M12 3.5l9.5 17h-19L12 3.5z"/><path d="M12 10v4.5M12 17.5h.01"/>',
+  plan:'<rect x="3" y="5" width="13" height="13" rx="2"/><path d="M3 9h13M7 3v4M12 3v4"/><circle cx="17.5" cy="17" r="4"/><path d="M17.5 15.3V17l1.2 1"/>',
+  radio:'<circle cx="12" cy="12" r="2"/><path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/>',
+  pulse:'<path d="M3 12h4l2.5-6 5 12 2.5-6h4"/>',
+  eye:'<path d="M2 12s3.8-7 10-7 10 7 10 7-3.8 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  table:'<rect x="3.5" y="5" width="17" height="14" rx="1.5"/><path d="M3.5 10h17M3.5 14.5h17M9.5 10v9"/>',
+  jobs:'<rect x="3.5" y="5" width="17" height="14" rx="1.5"/><path d="M3.5 10h17M9.5 10v9"/><circle cx="15" cy="14.5" r="2.6"/><path d="M15 13.3v1.2l.8.6"/>',
+  bolt:'<path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/>',
+  inbox:'<path d="M3 13l3-8h12l3 8v6H3v-6z"/><path d="M3 13h5l1 2h6l1-2h5"/>',
+  trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
+  repeat:'<path d="M17 2l3 3-3 3M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3M20 13v2a4 4 0 0 1-4 4H4"/>',
+  clock:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  search:'<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.3-4.3"/>',
+  send:'<path d="M21 3L3 10.5l7 3 3 7L21 3z"/><path d="M10 13.5l4.5-4.5"/>',
+  mail:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7.5l9 6 9-6"/>',
+  power:'<path d="M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0"/>',
+  skip:'<circle cx="12" cy="12" r="8.5"/><path d="M8.5 8.5l7 7"/>'
+};
+
+// k: trig — запускается сам по времени, if — развилка
+const N=[
+  {id:'tab1',g:'br',x:100,y:200,i:'win',t:'Вкладка 1',s:'React',d:'Вкладка браузера, где ты что-то меняешь. React-приложение: редактор, календарь, список, «Ближайшее».',f:'frontend/src/pages/'},
+  {id:'tab2',g:'br',x:100,y:470,i:'win',t:'Вкладка 2',s:'React · WebSocket',d:'Вторая вкладка или другое устройство того же пользователя. Держит WebSocket и получает события.',f:'frontend/src/realtime/ws.ts',r:'Работает при двух одновременно открытых клиентах'},
+  {id:'banner',g:'br',x:260,y:330,i:'edit',t:'Редактор с баннером',s:'ConflictBanner',d:'Открытый редактор с несохранёнными правками. Если заметку изменили в другом месте, появляется баннер с выбором: их версия, моя поверх, скопировать свой текст.',f:'frontend/src/components/ConflictBanner.tsx',r:'Одновременная правка не теряется молча'},
+  {id:'refetch',g:'br',x:260,y:620,i:'refresh',t:'Перезапрос данных',s:'TanStack Query',d:'По событию помечает данные устаревшими и перезапрашивает только то, что сейчас на экране.',f:'frontend/src/realtime/ws.ts'},
+  {id:'views',g:'br',x:260,y:760,i:'cal',t:'Календарь, список, «Ближайшее»',s:'FullCalendar · Virtual',d:'Экраны, которые обновляются сами. Календарь — месяц, неделя, день; список — с поиском и фильтрами на сервере.',f:'frontend/src/pages/',r:'Календарь, список и «Ближайшее» обновляются без перезагрузки'},
+  {id:'popup',g:'br',x:100,y:1010,i:'bell',t:'Всплывающее уведомление',s:'во всех вкладках',d:'Уведомление о напоминании. Появляется во всех открытых вкладках в одну и ту же секунду.',f:'frontend/src/components/NotificationCenter.tsx',r:'Уведомление всплывает во всех вкладках, после F5 не повторяется'},
+
+  {id:'rest',g:'api',x:440,y:200,i:'api',t:'REST API',s:'FastAPI',d:'HTTP API: заметки, теги, вхождения, корзина, настройки. Документация API — на /docs.',f:'backend/app/api/'},
+  {id:'session',g:'api',x:590,y:200,i:'lock',t:'Сессия',s:'cookie → user',d:'Находит пользователя по cookie сессии. Чужие заметки не видны и не меняются.',f:'backend/app/api/auth.py'},
+  {id:'ver',g:'api',x:740,y:200,k:'if',i:'split',t:'version совпала?',s:'IF',d:'Оптимистичная блокировка. Правка принимается, только если номер версии совпадает с тем, что в базе.',f:'backend/app/services/notes.py',r:'Одновременная правка не теряется молча'},
+  {id:'tx',g:'api',x:890,y:200,i:'layers',t:'Транзакция',s:'BEGIN … COMMIT',d:'Одна транзакция: запись заметки или исключения, пересчёт напоминаний, NOTIFY. Применяется всё или ничего.',f:'backend/app/services/notes.py'},
+  {id:'r409',g:'api',x:740,y:370,i:'warn',t:'Ответ 409',s:'+ свежая версия',d:'Правка не применена, но и не потеряна: она осталась во вкладке. Вместе с ошибкой приходит актуальная версия заметки.',f:'backend/app/api/notes.py',r:'Второй пользователь видит, что версия изменилась'},
+  {id:'replan',g:'api',x:890,y:370,i:'plan',t:'replan()',s:'planner.py',d:'Пересчитывает напоминания заметки. Удаляет ожидающие задания и создаёт новые — только с fire_at в будущем и только если заметка активна и не в корзине.',f:'backend/app/services/planner.py',r:'Деактивация, перенос времени, удаление и восстановление'},
+  {id:'ws',g:'api',x:590,y:520,i:'radio',t:'WebSocket',s:'/api/ws',d:'Каждая открытая вкладка держит соединение. Авторизация — тем же cookie, что и REST.',f:'backend/app/api/ws.py',r:'Правка в одной вкладке видна в другой без перезагрузки'},
+  {id:'listen',g:'api',x:740,y:520,i:'pulse',t:'LISTEN',s:'канал user_<id>',d:'Слушает каналы PostgreSQL и раздаёт события вкладкам нужного пользователя. Так события worker’а тоже доходят до вкладок.',f:'backend/app/services/realtime.py'},
+  {id:'shown',g:'api',x:440,y:1010,i:'eye',t:'Отметка «показано»',s:'POST /shown',d:'Вкладка сообщает, что показала уведомление. Повторный вызов ничего не меняет.',f:'backend/app/api/notifications.py'},
+
+  {id:'notes',g:'db',x:1070,y:100,i:'table',t:'notes',s:'таблица',d:'Заметки: заголовок, текст, момент в UTC, пояс серии, повтор и дата окончания, напоминания, version, deleted_at.',f:'backend/app/models.py',r:'Смена пояса меняет отображение, но не момент напоминания'},
+  {id:'overrides',g:'db',x:1070,y:230,i:'table',t:'occurrence_overrides',s:'таблица',d:'Исключения вхождений: (заметка, исходное время) → новое время, текст, статус или «удалено».',f:'backend/app/models.py',r:'Отдельное вхождение меняется, не трогая остальные'},
+  {id:'jobs',g:'db',x:1070,y:370,i:'jobs',t:'reminder_jobs',s:'таблица',d:'Задания напоминаний: какое вхождение, за сколько минут, когда сработать, статус pending / sent / skipped. Уникальный ключ не даёт дублей.',f:'backend/app/models.py'},
+  {id:'notify',g:'db',x:1070,y:520,i:'bolt',t:'NOTIFY',s:'pg_notify',d:'Событие в канал пользователя. Уходит только после COMMIT, поэтому вкладки не увидят того, чего нет в базе.',f:'backend/app/services/realtime.py'},
+  {id:'outbox',g:'db',x:1070,y:660,i:'inbox',t:'email_outbox',s:'таблица',d:'Очередь писем. job_id уникален: на одно напоминание — одна строка, значит одно письмо.',f:'backend/app/models.py',r:'Ровно одно письмо на каждое напоминание'},
+  {id:'notifs',g:'db',x:1070,y:820,i:'table',t:'notifications',s:'таблица',d:'Уведомления для интерфейса. shown_at заполняется, когда вкладка показала уведомление.',f:'backend/app/models.py'},
+
+  {id:'janitor',g:'wk',x:1300,y:100,k:'trig',i:'trash',t:'Очистка корзины',s:'раз в час',d:'Удаляет насовсем заметки, пролежавшие в корзине больше 30 дней.',f:'backend/app/worker/janitor.py',r:'Корзина очищается сама через 30 дней'},
+  {id:'horizon',g:'wk',x:1300,y:230,k:'trig',i:'repeat',t:'Продление повторов',s:'раз в 10 минут',d:'Дописывает задания повторяющимся заметкам на 7 дней вперёд.',f:'backend/app/worker/dispatcher.py',r:'Повторяющаяся заметка напоминает о каждом вхождении'},
+  {id:'tick',g:'wk',x:1460,y:230,k:'trig',i:'clock',t:'Диспетчер',s:'каждую секунду',d:'Просыпается раз в секунду и ищет созревшие задания. Точность — не хуже секунды.',f:'backend/app/worker/dispatcher.py'},
+  {id:'pick',g:'wk',x:1460,y:370,i:'search',t:'Созревшие задания',s:'SKIP LOCKED',d:'SELECT … FOR UPDATE SKIP LOCKED. Даже два worker’а не возьмут одно и то же задание.',f:'backend/app/worker/dispatcher.py',r:'Ровно одно письмо на каждое напоминание'},
+  {id:'activeIf',g:'wk',x:1460,y:520,k:'if',i:'split',t:'Заметка активна?',s:'IF',d:'Последняя проверка перед отправкой: заметка активна и не лежит в корзине.',f:'backend/app/worker/dispatcher.py',r:'Деактивированная заметка не напоминает'},
+  {id:'fire',g:'wk',x:1460,y:670,i:'send',t:'Сработало',s:'одна транзакция',d:'В одной транзакции: задание → sent, письмо в очередь, уведомление для интерфейса, NOTIFY.',f:'backend/app/worker/dispatcher.py'},
+  {id:'mailer',g:'wk',x:1300,y:800,i:'mail',t:'Отправщик писем',s:'aiosmtplib',d:'Забирает письма из очереди и отправляет по SMTP. Message-ID = id задания: если процесс упадёт между отправкой и отметкой, почта склеит дубль.',f:'backend/app/worker/mailer.py'},
+  {id:'start',g:'wk',x:1300,y:960,k:'trig',i:'power',t:'Старт worker',s:'после простоя',d:'При запуске находит задания, срок которых прошёл, пока сервер был выключен.',f:'backend/app/worker/__main__.py',r:'Напоминания, пропущенные во время простоя'},
+  {id:'downIf',g:'wk',x:1460,y:960,k:'if',i:'split',t:'Событие впереди?',s:'IF',d:'Если сама встреча ещё не наступила, напоминание полезно — отправляем с пометкой «с опозданием».',f:'backend/app/worker/__main__.py'},
+  {id:'skipped',g:'wk',x:1620,y:960,i:'skip',t:'Пропустить',s:'status = skipped',d:'Событие уже прошло: письмо не шлём. Во вкладке — одно сводное уведомление о пропущенных.',f:'backend/app/worker/__main__.py'},
+
+  {id:'mailpit',g:'ml',x:1800,y:800,i:'mail',t:'Mailpit',s:'localhost:8025',d:'Заглушка почты: ловит все письма и показывает их в браузере. У неё есть API — тесты проверяют, что письмо одно.',f:'docker-compose.yml',r:'Внешние сервисы заменены заглушками'}
+];
+
+const EDGE_LIST=[
+  ['tab1','rest'],['tab2','banner'],['banner','rest'],['rest','session'],['session','ver'],
+  ['ver','tx','да'],['ver','r409','нет'],['r409','banner'],
+  ['tx','notes','заметка'],['tx','overrides','вхождение'],['tx','replan'],
+  ['replan','jobs'],['replan','notify'],['notify','listen'],['listen','ws'],
+  ['ws','tab2'],['ws','popup'],['tab2','refetch'],['refetch','views'],
+  ['popup','shown'],['shown','notifs'],
+  ['janitor','notes'],['horizon','jobs'],['tick','pick'],['jobs','pick'],['pick','activeIf'],
+  ['activeIf','fire','да'],['fire','outbox'],['fire','notifs'],['fire','notify'],
+  ['outbox','mailer'],['mailer','mailpit','SMTP'],
+  ['jobs','start'],['start','downIf'],['downIf','fire','да'],['downIf','skipped','нет']
+];
+
+const SAVE=(v='Версия совпала.')=>[
+  {e:'rest>session',x:'Сервер узнаёт пользователя по cookie сессии.'},
+  {e:'session>ver',x:v},
+  {e:'ver>tx',x:'Открываем транзакцию.'}
+];
+const SC=[
+  {name:'Правка → вторая вкладка',
+   desc:'Ты меняешь заметку в одной вкладке, а календарь, список и «Ближайшее» в другой обновляются сами, без перезагрузки.',
+   proves:'Две вкладки показывают одно и то же; экраны обновляются сами.',
+   steps:[
+    {n:'tab1',x:'Во вкладке 1 меняешь заголовок и жмёшь «Сохранить». С правкой уходит номер версии: version = 7.'},
+    {e:'tab1>rest',x:'PATCH /api/notes/{id}: новый заголовок и version = 7.'},
+    ...SAVE('Сверяем версию: в базе тоже 7, правка принимается.'),
+    {e:'tx>notes',x:'Записываем правку. Теперь version = 8.'},
+    {e:'tx>replan',x:'Время заметки могло поменяться, поэтому пересчитываем её напоминания.'},
+    {e:'replan>jobs',x:'Старые задания удалены, новые созданы — только те, чей срок ещё впереди.'},
+    {e:'replan>notify',x:'NOTIFY: «заметка изменилась, version 8». Событие уйдёт только после COMMIT.'},
+    {e:'notify>listen',x:'API слушает канал PostgreSQL и получает событие.'},
+    {e:'listen>ws',x:'Событие рассылается всем вкладкам этого пользователя.'},
+    {e:'ws>tab2',x:'Вкладка 2 получает событие через несколько десятков миллисекунд.'},
+    {e:'tab2>refetch',x:'TanStack Query помечает данные устаревшими и перезапрашивает их.'},
+    {e:'refetch>views',x:'Календарь, список и «Ближайшее» перерисованы. Перезагружать страницу не нужно.'}
+  ]},
+  {name:'Одновременная правка',
+   desc:'Две вкладки правят одну заметку. Вторая не затирает первую молча: она видит, что версия изменилась, и выбирает, что делать.',
+   proves:'Если заметку правили с двух сторон, ни одна правка не теряется молча.',
+   steps:[
+    {n:'tab2',x:'Вкладка 2 открыла заметку (version 7) и печатает текст, пока не сохраняя.'},
+    {e:'tab1>rest',x:'Тем временем вкладка 1 сохраняет свою правку с version = 7.'},
+    ...SAVE('7 = 7, правка вкладки 1 принимается.'),
+    {e:'tx>notes',x:'В базе теперь version = 8.'},
+    {e:'tx>replan',x:'Пересчёт напоминаний.'},
+    {e:'replan>notify',x:'NOTIFY: «заметка изменилась, version 8».'},
+    {e:'notify>listen',x:'API получает событие.'},
+    {e:'listen>ws',x:'Рассылка вкладкам.'},
+    {e:'ws>tab2',x:'Вкладка 2 узнаёт о новой версии, пока ты ещё печатаешь.'},
+    {e:'tab2>banner',x:'Несохранённый текст не перезаписывается. Появляется баннер «Заметку изменили в другой вкладке».'},
+    {e:'banner>rest',x:'Допустим, ты всё равно жмёшь «Сохранить». Уходит старая version = 7.'},
+    {e:'rest>session',x:'Проверка сессии.'},
+    {e:'session>ver',x:'Сверяем: 7 ≠ 8.'},
+    {e:'ver>r409',x:'Правка не применяется. Ответ 409 Conflict вместе со свежей версией из базы.'},
+    {e:'r409>banner',x:'Редактор показывает обе версии: взять их, сохранить свою поверх или скопировать свой текст. Ничего не потеряно.'}
+  ]},
+  {name:'Напоминание',
+   desc:'Встреча в 15:00, напоминание «за 10 минут». В 14:50:00 уходит ровно одно письмо, а уведомление всплывает во всех открытых вкладках.',
+   proves:'Ровно одно письмо на напоминание; уведомление во всех вкладках, после F5 не всплывает снова.',
+   steps:[
+    {n:'tick',x:'Диспетчер в worker’е просыпается каждую секунду. Сейчас 14:50:00.'},
+    {e:'tick>pick',x:'Ищем задания, у которых fire_at ≤ сейчас.'},
+    {e:'jobs>pick',x:'Нашлось задание «за 10 минут до 15:00». SKIP LOCKED: второй worker это же задание не возьмёт.'},
+    {e:'pick>activeIf',x:'Ещё раз проверяем: заметка активна и не в корзине?'},
+    {e:'activeIf>fire',x:'Да. Дальше всё в одной транзакции.'},
+    {e:'fire>outbox',x:'Письмо ставится в очередь. job_id уникален: второе письмо на это напоминание не вставится.'},
+    {e:'fire>notifs',x:'Запись уведомления для интерфейса.'},
+    {e:'fire>notify',x:'NOTIFY: «напоминание сработало».'},
+    {e:'notify>listen',x:'API получает событие.'},
+    {e:'listen>ws',x:'Рассылка всем вкладкам пользователя.'},
+    {e:'ws>popup',x:'Уведомление всплывает во всех открытых вкладках в одну и ту же секунду.'},
+    {e:'popup>shown',x:'Вкладка сообщает серверу: «показано».'},
+    {e:'shown>notifs',x:'shown_at = 14:50:01. После F5 уведомление не всплывёт снова.'},
+    {e:'outbox>mailer',x:'Отправщик писем забирает письмо из очереди.'},
+    {e:'mailer>mailpit',x:'Письмо приходит в Mailpit, его видно на localhost:8025. Одно.'}
+  ]},
+  {name:'Выключить и включить',
+   desc:'Деактивированная заметка не напоминает. Включил обратно до срока — напоминания вернулись; после срока — прошедшие не досылаются. Удаление в корзину и восстановление работают так же.',
+   proves:'Деактивация, реактивация до и после срока, удаление и восстановление.',
+   steps:[
+    {n:'tab1',x:'Встреча в 15:00, напоминания за час и за 10 минут. Снимаешь галочку «активна».'},
+    {e:'tab1>rest',x:'PATCH: is_active = false.'},
+    ...SAVE(),
+    {e:'tx>notes',x:'is_active = false.'},
+    {e:'tx>replan',x:'Пересчёт: заметка неактивна…'},
+    {e:'replan>jobs',x:'…значит, все её ожидающие задания удаляются. Напоминаний не будет.'},
+    {n:'tab1',x:'14:30. Включаешь заметку обратно. «За час» (14:00) уже в прошлом, «за 10 минут» (14:50) ещё впереди.'},
+    {e:'tab1>rest',x:'PATCH: is_active = true.'},
+    ...SAVE(),
+    {e:'tx>replan',x:'Пересчёт: заметка активна.'},
+    {e:'replan>jobs',x:'Создано только задание на 14:50. Прошедшее напоминание на 14:00 не досылается.'},
+    {e:'replan>notify',x:'Событие для остальных вкладок.'},
+    {e:'notify>listen',x:'API получает событие.'},
+    {e:'listen>ws',x:'Рассылка вкладкам.'},
+    {e:'ws>tab2',x:'Во вкладке 2 заметка снова активна.'}
+  ]},
+  {name:'Повторы',
+   desc:'Ежедневная планёрка в 9:00. Перенос одного дня не трогает остальные дни. Изменение «начиная с этого дня» не трогает прошлые.',
+   proves:'Отдельное вхождение меняется отдельно; «начиная с этого дня» не трогает прошлое; напоминание о каждом вхождении.',
+   steps:[
+    {n:'tab1',x:'В календаре перетаскиваешь планёрку 22.10 на 23.10.'},
+    {e:'tab1>rest',x:'PATCH вхождения 22.10, scope = «только это».'},
+    ...SAVE(),
+    {e:'tx>overrides',x:'Строка-исключение: «вхождение 22.10 09:00 → 23.10 09:00». Сама серия не меняется.'},
+    {e:'tx>replan',x:'Напоминание этого дня переезжает на новую дату.'},
+    {e:'replan>jobs',x:'Задания остальных дней не тронуты.'},
+    {n:'tab1',x:'Теперь меняешь время на 10:00 «начиная с 25.10».'},
+    {e:'tab1>rest',x:'PATCH вхождения 25.10, scope = «это и следующие».'},
+    ...SAVE(),
+    {e:'tx>notes',x:'Серия делится: у старой until = 24.10, новая начинается 25.10 в 10:00. Прошлые дни остаются в старой серии без изменений.'},
+    {e:'tx>replan',x:'Пересчёт напоминаний обеих серий.'},
+    {e:'replan>jobs',x:'Будущие напоминания «за 10 минут» теперь в 9:50 вместо 8:50.'},
+    {n:'horizon',x:'Как повтор напоминает о каждом дне: раз в 10 минут worker дописывает задания на 7 дней вперёд.'},
+    {e:'horizon>jobs',x:'INSERT … ON CONFLICT DO NOTHING: уже отправленное не продублируется.'}
+  ]},
+  {name:'Перезапуск сервера',
+   desc:'Сервер был выключен с 14:00 до 15:30. Заметки, теги и задания лежат в PostgreSQL и никуда не деваются. Остаётся решить, что делать с напоминаниями, которые должны были прийти за это время.',
+   proves:'После перезапуска всё на месте; политика для пропущенных напоминаний описана.',
+   steps:[
+    {n:'start',x:'15:30. Worker запускается.'},
+    {e:'jobs>start',x:'Находит ожидающие задания, срок которых прошёл во время простоя.'},
+    {e:'start>downIf',x:'Для каждого решает: сама встреча ещё впереди?'},
+    {e:'downIf>fire',x:'Встреча в 16:00, «за час» должно было прийти в 15:00. Встреча впереди — шлём сейчас с пометкой «с опозданием».'},
+    {e:'fire>outbox',x:'Письмо в очередь.'},
+    {e:'outbox>mailer',x:'Отправщик забирает письмо.'},
+    {e:'mailer>mailpit',x:'Письмо доставлено.'},
+    {n:'start',x:'Следующее задание: встреча была в 14:30.'},
+    {e:'start>downIf',x:'Встреча ещё впереди?'},
+    {e:'downIf>skipped',x:'Нет. Письмо о прошедшей встрече бесполезно: статус skipped, во вкладке одно сводное уведомление «пропущено напоминаний за время простоя: 3».'}
+  ]},
+  {name:'Корзина',
+   desc:'Удалённая заметка лежит в корзине 30 дней и пока не напоминает. Потом исчезает сама.',
+   proves:'Удаление отменяет напоминания; корзина очищается через 30 дней.',
+   steps:[
+    {n:'tab1',x:'Удаляешь заметку.'},
+    {e:'tab1>rest',x:'DELETE /api/notes/{id}.'},
+    ...SAVE(),
+    {e:'tx>notes',x:'deleted_at = сейчас. Заметка в корзине, её можно восстановить.'},
+    {e:'tx>replan',x:'Пересчёт: заметка в корзине…'},
+    {e:'replan>jobs',x:'…все её ожидающие напоминания удалены. При восстановлении вернутся те, чей срок ещё впереди.'},
+    {n:'janitor',x:'Раз в час worker проверяет корзину.'},
+    {e:'janitor>notes',x:'Заметки с deleted_at старше 30 дней удаляются насовсем вместе с исключениями и заданиями.'}
+  ]}
+];
+
+const $=s=>document.querySelector(s);
+const NS='http://www.w3.org/2000/svg';
+const W={w:1900,h:1120};
+const stage=$('#stage'),world=$('#world'),svg=$('#edges'),nodesEl=$('#nodes');
+const byId=Object.fromEntries(N.map(n=>[n.id,n]));
+const E=EDGE_LIST.map(([a,b,l])=>({id:a+'>'+b,a:byId[a],b:byId[b],l}));
+const eById=Object.fromEntries(E.map(e=>[e.id,e]));
+const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const wide=matchMedia('(min-width: 861px)');
+
+function el(tag,attrs,parent){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
+
+// --- рисуем схему ---
+$('#legend').innerHTML=Object.entries(GROUPS).map(([g,t])=>`<span class="g-${g}"><i></i>${t}</span>`).join('');
+svg.setAttribute('viewBox',`0 0 ${W.w} ${W.h}`);svg.setAttribute('width',W.w);svg.setAttribute('height',W.h);
+const defs=el('defs',{},svg);
+['idle','br','api','db','wk','ml'].forEach(k=>{
+  const m=el('marker',{id:'m-'+k,viewBox:'0 0 10 10',refX:'8',refY:'5',markerWidth:'7',markerHeight:'7',orient:'auto'},defs);
+  el('path',{d:'M0 0L10 5L0 10z',class:'mk-'+k},m);
+});
+const gLayer=el('g',{},svg),eLayer=el('g',{},svg),lLayer=el('g',{},svg);
+for(const g in GROUPS){
+  const ns=N.filter(n=>n.g===g);
+  const x1=Math.min(...ns.map(n=>n.x))-78,x2=Math.max(...ns.map(n=>n.x))+78,y1=Math.min(...ns.map(n=>n.y))-80,y2=Math.max(...ns.map(n=>n.y))+92;
+  const G=el('g',{class:'grp g-'+g},gLayer);
+  el('rect',{x:x1,y:y1,width:x2-x1,height:y2-y1,rx:18},G);
+  el('text',{x:x1+16,y:y1+26},G).textContent=GROUPS[g];
+}
+const H=30,LB=44;
+function pathD(a,b){
+  const dx=b.x-a.x,dy=b.y-a.y;
+  if(Math.abs(dx)<40){
+    const sy=dy>0?a.y+H+LB:a.y-H-6, ty=dy>0?b.y-H-8:b.y+H+LB, my=(sy+ty)/2;
+    return `M${a.x} ${sy} C${a.x} ${my} ${b.x} ${my} ${b.x} ${ty}`;
+  }
+  if(dx>0){const sx=a.x+H+4,tx=b.x-H-7,c=Math.max(50,(tx-sx)/2);return `M${sx} ${a.y} C${sx+c} ${a.y} ${tx-c} ${b.y} ${tx} ${b.y}`;}
+  const sx=a.x-H-4,tx=b.x+H+7,c=Math.max(50,(sx-tx)/2);return `M${sx} ${a.y} C${sx-c} ${a.y} ${tx+c} ${b.y} ${tx} ${b.y}`;
+}
+E.forEach(e=>{
+  e.el=el('path',{d:pathD(e.a,e.b),class:'edge g-'+e.a.g,'marker-end':'url(#m-idle)'},eLayer);
+  if(e.l){
+    const L=e.el.getTotalLength(),p=e.el.getPointAtLength(L/2),w=e.l.length*6.7+14;
+    e.lbl=el('g',{class:'elbl'},lLayer);
+    el('rect',{x:p.x-w/2,y:p.y-10,width:w,height:20,rx:10},e.lbl);
+    el('text',{x:p.x,y:p.y+4,'text-anchor':'middle'},e.lbl).textContent=e.l;
+  }
+});
+const pk=el('circle',{r:7,id:'pk'},svg);pk.style.display='none';
+N.forEach(n=>{
+  const d=document.createElement('div');
+  d.className=`node g-${n.g}${n.k?' '+n.k:''}`;
+  d.style.left=n.x-30+'px';d.style.top=n.y-30+'px';
+  d.tabIndex=0;d.dataset.id=n.id;d.setAttribute('role','button');d.setAttribute('aria-label',n.t);
+  d.innerHTML=`<div class="box"><svg viewBox="0 0 24 24" aria-hidden="true">${IC[n.i]}</svg></div><i class="ok"><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg></i><div class="lbl"><b>${n.t}</b><span>${n.s}</span></div>`;
+  d.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();showInfo(n);}});
+  nodesEl.appendChild(d);n.el=d;
+});
+
+// --- камера ---
+let cam={x:0,y:0,s:1};
+function apply(smooth){
+  stage.classList.toggle('smooth',!!smooth&&!RM);
+  world.style.transform=`translate(${cam.x}px,${cam.y}px) scale(${cam.s})`;
+  stage.style.backgroundSize=`${22*cam.s}px ${22*cam.s}px`;
+  stage.style.backgroundPosition=`${cam.x}px ${cam.y}px`;
+}
+function fitScale(){const r=stage.getBoundingClientRect();return Math.min(r.width/(W.w+40),r.height/(W.h+40));}
+function fit(smooth){const r=stage.getBoundingClientRect(),s=fitScale();cam={s,x:(r.width-W.w*s)/2,y:(r.height-W.h*s)/2};apply(smooth);}
+function focusBox(x1,y1,x2,y2,smooth){
+  const r=stage.getBoundingClientRect();
+  let s=Math.min(r.width/(x2-x1+300),(r.height-70)/(y2-y1+260),1.05);
+  s=Math.max(s,fitScale());
+  const cx=(x1+x2)/2,cy=(y1+y2)/2+28;
+  cam={s,x:r.width/2-cx*s,y:(r.height+60)/2-cy*s};apply(smooth);
+}
+function stepNodes(st){return st.e?[eById[st.e].a,eById[st.e].b]:[byId[st.n]];}
+function focusStep(st,smooth){const ns=stepNodes(st);focusBox(Math.min(...ns.map(n=>n.x)),Math.min(...ns.map(n=>n.y)),Math.max(...ns.map(n=>n.x)),Math.max(...ns.map(n=>n.y)),smooth);}
+function zoomAt(mx,my,k){const s=Math.min(2.2,Math.max(0.15,cam.s*k)),f=s/cam.s;cam.x=mx-(mx-cam.x)*f;cam.y=my-(my-cam.y)*f;cam.s=s;apply(false);}
+
+// --- проигрывание ---
+let S=SC[0],idx=0,running=-1,playing=false,busy=false,runTok=0,speed=1,follow=true;
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const stepsEl=$('#steps');
+
+function curStep(){return running>=0?running:idx-1;}
+function renderMarks(){
+  const inN=new Set(),inE=new Set(),done=new Set(),act=new Set();
+  S.steps.forEach(st=>{stepNodes(st).forEach(n=>inN.add(n.id));if(st.e)inE.add(st.e);});
+  for(let i=0;i<idx;i++)stepNodes(S.steps[i]).forEach(n=>done.add(n.id));
+  const ci=curStep(),cur=ci>=0?S.steps[ci]:null;let actE=null;
+  if(cur){if(cur.e){actE=cur.e;act.add(running>=0?eById[cur.e].a.id:eById[cur.e].b.id);}else act.add(cur.n);}
+  N.forEach(n=>{const c=n.el.classList;c.toggle('dim',!inN.has(n.id));c.toggle('done',done.has(n.id)&&!act.has(n.id));c.toggle('act',act.has(n.id));});
+  E.forEach(e=>{
+    const on=e.id===actE,inn=inE.has(e.id);
+    e.el.classList.toggle('dim',!inn);e.el.classList.toggle('in',inn);e.el.classList.toggle('on',on);
+    e.el.setAttribute('marker-end',`url(#m-${on?e.a.g:'idle'})`);
+    if(e.lbl)e.lbl.classList.toggle('dim',!inn);
+  });
+  [...stepsEl.children].forEach((li,i)=>{const b=li.firstChild;b.classList.toggle('done',i<idx&&i!==ci);b.classList.toggle('cur',i===ci);});
+  if(ci>=0&&wide.matches)stepsEl.children[ci].scrollIntoView({block:'nearest',behavior:RM?'auto':'smooth'});
+  $('#capNo').textContent=ci>=0?`${ci+1} / ${S.steps.length}`:'▶';
+  $('#capTx').textContent=ci>=0?S.steps[ci].x:'Нажми «Запустить», чтобы пустить данные по схеме. Или кликни по узлу, чтобы узнать, что он делает.';
+  updCtl();
+}
+function updCtl(){
+  const n=S.steps.length;
+  $('#bPlay').textContent=playing?'⏸ Пауза':idx>=n?'↻ Ещё раз':idx>0?'▶ Дальше':'▶ Запустить';
+  $('#bPrev').disabled=idx===0&&running<0;
+  $('#bNext').disabled=idx>=n;
+  $('#prog').textContent=idx>=n?'готово ✓':`шаг ${Math.max(idx,0)} из ${n}`;
+}
+function movePacket(e,tok){
+  return new Promise(res=>{
+    const p=e.el,L=p.getTotalLength(),dur=Math.min(1800,650+L*0.9)/speed,t0=performance.now();
+    pk.setAttribute('class','g-'+e.a.g);pk.style.display='';
+    const f=now=>{
+      if(tok!==runTok){pk.style.display='none';return res(false);}
+      const k=Math.min(1,(now-t0)/dur),q=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2,pt=p.getPointAtLength(L*q);
+      pk.setAttribute('cx',pt.x);pk.setAttribute('cy',pt.y);
+      if(k<1)requestAnimationFrame(f);else{pk.style.display='none';res(true);}
+    };
+    requestAnimationFrame(f);
+  });
+}
+async function runStep(i,tok){
+  running=i;const st=S.steps[i];
+  if(follow)focusStep(st,true);
+  renderMarks();
+  if(st.e){if(!await movePacket(eById[st.e],tok))return false;}
+  else{await wait(1500/speed);if(tok!==runTok)return false;}
+  running=-1;idx=i+1;renderMarks();return true;
+}
+function cancel(){runTok++;playing=false;busy=false;running=-1;pk.style.display='none';}
+async function play(){
+  if(playing){playing=false;updCtl();return;}
+  if(busy)return;
+  if(idx>=S.steps.length){idx=0;renderMarks();}
+  playing=true;const tok=++runTok;updCtl();
+  while(playing&&idx<S.steps.length){
+    busy=true;const ok=await runStep(idx,tok);if(tok!==runTok)return;busy=false;
+    if(!ok)return;
+    if(playing&&idx<S.steps.length)await wait(500/speed);
+    if(tok!==runTok)return;
+  }
+  playing=false;updCtl();
+}
+async function next(){
+  if(playing){playing=false;updCtl();return;}
+  if(busy||idx>=S.steps.length)return;
+  const tok=++runTok;busy=true;await runStep(idx,tok);if(tok===runTok){busy=false;updCtl();}
+}
+function prev(){
+  cancel();idx=Math.max(0,idx-1);renderMarks();
+  if(follow){idx>0?focusStep(S.steps[idx-1],true):fit(true);}
+}
+async function jump(i){
+  cancel();idx=i;renderMarks();
+  const tok=++runTok;busy=true;await runStep(i,tok);if(tok===runTok){busy=false;updCtl();}
+}
+function reset(){cancel();idx=0;renderMarks();fit(true);}
+function selectScenario(k){
+  S=SC[k];
+  [...$('#chips').children].forEach((b,i)=>b.setAttribute('aria-pressed',i===k));
+  $('#sdesc').textContent=S.desc;
+  $('#proves').innerHTML=`<b>Доказывает:</b> ${S.proves}`;
+  stepsEl.innerHTML=S.steps.map((st,i)=>{
+    const pth=st.e?`${eById[st.e].a.t} → ${eById[st.e].b.t}`:byId[st.n].t;
+    return `<li><button type="button" data-i="${i}"><span class="no">${i+1}</span><span class="pth">${pth}</span><span class="tx">${st.x}</span></button></li>`;
+  }).join('');
+  reset();
+}
+function setFollow(v){
+  follow=v;$('#follow').checked=v;
+  if(v){const ci=curStep();ci>=0?focusStep(S.steps[ci],true):fit(true);}
+}
+
+// --- карточка узла ---
+let selNode=null;
+function showInfo(n){
+  if(selNode)selNode.el.classList.remove('sel');
+  selNode=n;n.el.classList.add('sel');
+  const box=$('#info');box.className='info g-'+n.g;box.hidden=false;
+  $('#iG').textContent=GROUPS[n.g];$('#iT').textContent=n.t;$('#iS').textContent=n.s;$('#iD').textContent=n.d;
+  $('#iDl').innerHTML=(n.f?`<dt>Где в коде</dt><dd class="m">${n.f}</dd>`:'')+(n.r?`<dt>Требование</dt><dd>${n.r}</dd>`:'');
+}
+function hideInfo(){$('#info').hidden=true;if(selNode)selNode.el.classList.remove('sel');selNode=null;}
+
+// --- события ---
+$('#chips').innerHTML=SC.map((s,i)=>`<button type="button" class="chip" data-k="${i}">${s.name}</button>`).join('');
+$('#chips').addEventListener('click',e=>{const b=e.target.closest('.chip');if(b)selectScenario(+b.dataset.k);});
+stepsEl.addEventListener('click',e=>{const b=e.target.closest('button[data-i]');if(b)jump(+b.dataset.i);});
+$('#bPlay').addEventListener('click',play);
+$('#bNext').addEventListener('click',next);
+$('#bPrev').addEventListener('click',prev);
+$('#bReset').addEventListener('click',reset);
+$('#follow').addEventListener('change',e=>setFollow(e.target.checked));
+document.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',()=>{
+  speed=+b.dataset.sp;document.querySelectorAll('.seg button').forEach(x=>x.setAttribute('aria-pressed',x===b));
+}));
+$('#zIn').addEventListener('click',()=>{const r=stage.getBoundingClientRect();setFollow(false);zoomAt(r.width/2,r.height/2,1.25);});
+$('#zOut').addEventListener('click',()=>{const r=stage.getBoundingClientRect();setFollow(false);zoomAt(r.width/2,r.height/2,0.8);});
+$('#zFit').addEventListener('click',()=>{setFollow(false);fit(true);});
+$('#infoX').addEventListener('click',hideInfo);
+document.addEventListener('keydown',e=>{
+  if(e.target.closest('input,button,.node'))return;
+  if(e.key==='ArrowRight')next();else if(e.key==='ArrowLeft')prev();else if(e.key==='Escape')hideInfo();
+});
+
+const pts=new Map();let moved=0,pinchD=0,downNode=null;
+stage.addEventListener('pointerdown',e=>{
+  if(e.target.closest('.zoom,.info,.caption'))return;
+  stage.setPointerCapture(e.pointerId);
+  pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pts.size===1){moved=0;downNode=e.target.closest('.node');}
+  if(pts.size===2){const [a,b]=[...pts.values()];pinchD=Math.hypot(a.x-b.x,a.y-b.y);}
+  stage.classList.add('grabbing');
+});
+stage.addEventListener('pointermove',e=>{
+  if(!pts.has(e.pointerId))return;
+  const p0=pts.get(e.pointerId),p1={x:e.clientX,y:e.clientY};pts.set(e.pointerId,p1);
+  if(pts.size===1){
+    moved+=Math.abs(p1.x-p0.x)+Math.abs(p1.y-p0.y);
+    if(moved>4){if(follow)setFollow(false);cam.x+=p1.x-p0.x;cam.y+=p1.y-p0.y;apply(false);}
+  }else if(pts.size===2&&pinchD){
+    const [a,b]=[...pts.values()],d=Math.hypot(a.x-b.x,a.y-b.y),r=stage.getBoundingClientRect();
+    moved+=10;if(follow)setFollow(false);
+    zoomAt((a.x+b.x)/2-r.left,(a.y+b.y)/2-r.top,d/pinchD);pinchD=d;
+  }
+});
+function up(e,cancelled){
+  if(!pts.has(e.pointerId))return;
+  pts.delete(e.pointerId);if(pts.size<2)pinchD=0;
+  if(pts.size===0){
+    stage.classList.remove('grabbing');
+    if(!cancelled&&moved<5){downNode?showInfo(byId[downNode.dataset.id]):hideInfo();}
+  }
+}
+stage.addEventListener('pointerup',e=>up(e,false));
+stage.addEventListener('pointercancel',e=>up(e,true));
+stage.addEventListener('wheel',e=>{
+  e.preventDefault();const r=stage.getBoundingClientRect();
+  if(follow)setFollow(false);
+  zoomAt(e.clientX-r.left,e.clientY-r.top,Math.exp(-e.deltaY*0.0015));
+},{passive:false});
+new ResizeObserver(()=>{const ci=curStep();if(follow&&ci>=0)focusStep(S.steps[ci],false);else if(follow)fit(false);}).observe(stage);
+
+selectScenario(0);
+</script>
