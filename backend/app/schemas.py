@@ -54,7 +54,7 @@ class Prefs(BaseModel):
     day_start: int = Field(0, ge=0, le=23)  # часы в виде «неделя / день»
     day_end: int = Field(24, ge=1, le=24)
     start_page: Literal["calendar", "notes", "upcoming", "tasks", "matrix"] = "upcoming"  # matrix — старое имя «Задач»
-    upcoming_sections: list[Section] = ["focus", "today", "tomorrow", "week", "past"]  # что показывать в «Ближайшем»
+    upcoming_sections: list[Section] = ["focus", "past", "today", "tomorrow", "week"]  # что показывать в «Ближайшем»
     color_labels: dict[Color, str] = COLOR_LABELS
     theme: Literal["auto", "light", "dark"] = "auto"
 

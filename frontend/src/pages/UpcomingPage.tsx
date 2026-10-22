@@ -13,10 +13,10 @@ import { fmt, ms } from "../time";
 
 const SECTIONS: { key: Section; label: string; empty: string }[] = [
   { key: "focus", label: "★ Фокус дня", empty: "" },
+  { key: "past", label: "Прошедшие", empty: "Всё прошедшее отмечено. Отлично!" },
   { key: "today", label: "Сегодня", empty: "На сегодня больше ничего." },
   { key: "tomorrow", label: "Завтра", empty: "На завтра пока пусто." },
   { key: "week", label: "На неделе", empty: "Дальше на неделе ничего." },
-  { key: "past", label: "Прошедшие", empty: "Всё прошедшее отмечено. Отлично!" },
 ];
 
 export function UpcomingPage() {
@@ -96,7 +96,8 @@ export function UpcomingPage() {
     />
   );
 
-  const columns = shown.filter((s): s is Exclude<Section, "focus"> => s !== "focus");
+  // Порядок колонок фиксированный (прошедшие — первыми, слева), а не порядок включения переключателей.
+  const columns = SECTIONS.map((s) => s.key).filter((k): k is Exclude<Section, "focus"> => k !== "focus" && shown.includes(k));
   return (
     <Stack gap="md">
       <PageHeader title="Ближайшее" hint={DateTime.fromMillis(now).setZone(user.timezone).setLocale("ru").toFormat("cccc, d MMMM")}>
