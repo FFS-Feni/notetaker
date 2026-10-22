@@ -1,4 +1,4 @@
-.PHONY: up down logs test e2e seed demo psql dev-db
+.PHONY: up down logs test e2e seed demo psql dev-db chaos
 
 up:        ## всё приложение: база, почта, backend, worker, frontend → http://localhost:5173
 	docker compose up -d --build --wait
@@ -27,3 +27,6 @@ psql:      ## консоль базы
 
 dev-db:    ## только база и почта — для разработки без Docker-сборки
 	docker compose up -d --wait db mailpit
+
+chaos:     ## стресс-тест отказоустойчивости: нагрузка + падения backend, базы, worker’ов (≈2,5 мин)
+	cd backend && uv run python -m scripts.chaos

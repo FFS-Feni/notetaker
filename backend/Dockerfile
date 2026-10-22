@@ -6,4 +6,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 # Миграции — при каждом старте (на свежей базе создают схему, на старой ничего не делают).
 # Два процесса uvicorn: каждый слушает LISTEN сам, события доходят до всех вкладок.
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"]
+# При остановке ждём не больше 3 с: открытые WebSocket не держат перезапуск, вкладки переподключатся сами.
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-graceful-shutdown 3"]
