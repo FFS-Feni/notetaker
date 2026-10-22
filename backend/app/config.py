@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     smtp_port: int = 1025
     mail_from: str = "Notetaker <noreply@notetaker.local>"
     default_timezone: str = "Asia/Bishkek"
+    app_url: str = "http://localhost:5173"
 
 
 settings = Settings()
