@@ -18,5 +18,6 @@ class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING)
 
 
-engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+# Пул побольше: при десятках одновременных запросов они не ждут свободного соединения.
+engine = create_async_engine(settings.database_url, pool_pre_ping=True, pool_size=20, max_overflow=20)
 Session = async_sessionmaker(engine, expire_on_commit=False)
