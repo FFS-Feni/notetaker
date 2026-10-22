@@ -29,13 +29,29 @@ jobs:
         run: docker compose up -d --build --wait
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - name: Браузерные тесты с двумя вкладками
+      - name: Браузерные тесты — Chrome, Firefox, Safari (WebKit) и телефон
         working-directory: e2e
-        env: { CHROMIUM: /nonexistent }  # системного Chromium нет — берём браузер Playwright
+        env: { CHROMIUM: /nonexistent }  # системного Chromium нет — берём браузеры Playwright
         run: |
           npm ci --no-fund --no-audit
-          npx playwright install --with-deps chromium
+          npx playwright install --with-deps chromium firefox webkit
           npx playwright test
       - name: Логи при падении
         if: failure()
         run: docker compose logs backend worker
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Фронтенд собирается на Windows
+        working-directory: frontend
+        run: |
+          npm ci --no-fund --no-audit
+          npm run build
+      - uses: astral-sh/setup-uv@v6
+      - name: Повторы и часовые пояса на Windows (своей базы поясов в Windows нет — нужен пакет tzdata)
+        working-directory: backend
+        run: uv run pytest --noconftest -q tests/test_recurrence.py

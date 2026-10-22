@@ -74,6 +74,7 @@ export function MatrixPage() {
                 {quad?.items.map((n) => (
                   <Paper
                     key={n.id}
+                    data-testid="matrix-card"
                     withBorder
                     p={6}
                     radius="sm"

@@ -1,0 +1,3 @@
+# Переводы строк — LF везде, в том числе при клонировании на Windows.
+* text=auto eol=lf
+*.png binary
