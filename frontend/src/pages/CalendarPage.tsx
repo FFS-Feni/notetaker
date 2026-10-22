@@ -69,7 +69,7 @@ export function CalendarPage() {
         datesSet={(a) => setRange({ from: a.startStr, to: a.endStr })}
         events={(occ.data ?? []).map((o) => ({
           id: o.id,
-          title: o.title + (o.freq !== "none" ? " ↻" : ""),
+          title: (o.important ? "❗ " : "") + o.title + (o.freq !== "none" ? " ↻" : ""),
           start: o.start,
           allDay: false,
           backgroundColor: o.is_active ? (o.tags[0]?.color ?? "#5cb0ee") : "transparent",

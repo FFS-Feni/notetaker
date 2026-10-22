@@ -31,6 +31,8 @@ type Form = {
   until: string | null;
   reminders: string[];
   tag_ids: string[];
+  important: boolean;
+  urgent: boolean;
 };
 type Scope = "this" | "following" | "all";
 
@@ -40,7 +42,7 @@ function formFrom(note: Note | undefined, target: EditorTarget, tz: string): For
       target.kind === "new" && target.start
         ? target.start
         : DateTime.now().setZone(tz).plus({ hours: 1 }).startOf("hour").toFormat("yyyy-MM-dd HH:mm:ss");
-    return { title: "", body: "", start, is_active: true, freq: "none", until: null, reminders: ["10"], tag_ids: [] };
+    return { title: "", body: "", start, is_active: true, freq: "none", until: null, reminders: ["10"], tag_ids: [], important: false, urgent: false };
   }
   const occ = target.kind === "occ" ? target.occ : null;
   return {
@@ -52,6 +54,8 @@ function formFrom(note: Note | undefined, target: EditorTarget, tz: string): For
     until: note.until,
     reminders: note.reminders.map(String),
     tag_ids: note.tags.map((t) => String(t.id)),
+    important: note.important,
+    urgent: note.urgent,
   };
 }
 
@@ -148,6 +152,8 @@ export function NoteEditor({ target, onClose }: { target: EditorTarget; onClose:
       until: form.freq === "none" ? null : form.until,
       reminders: form.reminders.map(Number),
       tag_ids: form.tag_ids.map(Number),
+      important: form.important,
+      urgent: form.urgent,
     };
     if (target.kind === "new")
       return run(() => api("/notes", { method: "POST", body: { ...series, start_at } }), "Заметка создана");
@@ -254,6 +260,13 @@ export function NoteEditor({ target, onClose }: { target: EditorTarget; onClose:
                 />
               )}
             </Group>
+            <div>
+              <Text size="sm" fw={500} mb={4}>Приоритет</Text>
+              <Group gap="xs">
+                <Chip size="sm" color="red" checked={form.important} onChange={(v) => set("important", v)}>Важно</Chip>
+                <Chip size="sm" color="orange" checked={form.urgent} onChange={(v) => set("urgent", v)}>Срочно</Chip>
+              </Group>
+            </div>
             <div>
               <Text size="sm" fw={500} mb={4}>Напомнить</Text>
               <Chip.Group multiple value={form.reminders} onChange={(v) => set("reminders", v)}>

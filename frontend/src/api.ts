@@ -51,6 +51,9 @@ export type Note = {
   until: string | null;
   reminders: number[];
   tags: Tag[];
+  important: boolean;
+  urgent: boolean;
+  focus_on: string | null;
   version: number;
   created_at: string;
   updated_at: string;
@@ -68,9 +71,13 @@ export type Occurrence = {
   is_active: boolean;
   freq: Freq;
   tags: Tag[];
+  important: boolean;
+  urgent: boolean;
   version: number;
 };
-export type Upcoming = { now: string; today: Occurrence[]; week: Occurrence[]; past: Occurrence[] };
+export type Quadrant = { total: number; items: Note[] };
+export type Matrix = { do: Quadrant; plan: Quadrant; delegate: Quadrant; drop: Quadrant };
+export type Upcoming = { now: string; focus: Note[]; today: Occurrence[]; week: Occurrence[]; past: Occurrence[] };
 export type AppNotification = {
   id: number;
   kind: "reminder" | "missed";

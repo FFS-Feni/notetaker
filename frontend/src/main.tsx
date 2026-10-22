@@ -21,6 +21,7 @@ import { Login } from "./pages/Login";
 const CalendarPage = lazy(() => import("./pages/CalendarPage").then((m) => ({ default: m.CalendarPage })));
 const NotesPage = lazy(() => import("./pages/NotesPage").then((m) => ({ default: m.NotesPage })));
 const UpcomingPage = lazy(() => import("./pages/UpcomingPage").then((m) => ({ default: m.UpcomingPage })));
+const MatrixPage = lazy(() => import("./pages/MatrixPage").then((m) => ({ default: m.MatrixPage })));
 const TrashPage = lazy(() => import("./pages/TrashPage").then((m) => ({ default: m.TrashPage })));
 const TagsPage = lazy(() => import("./pages/TagsPage").then((m) => ({ default: m.TagsPage })));
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
@@ -47,6 +48,7 @@ function App() {
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/notes" element={<NotesPage />} />
           <Route path="/upcoming" element={<UpcomingPage />} />
+          <Route path="/matrix" element={<MatrixPage />} />
           <Route path="/trash" element={<TrashPage />} />
           <Route path="/tags" element={<TagsPage />} />
           <Route path="/settings" element={<SettingsPage />} />

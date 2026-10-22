@@ -4,8 +4,8 @@ import type { AppNotification } from "./api";
 
 // Какие данные перезапросить по событию с сервера.
 const AFFECTS: Record<string, string[]> = {
-  notes: ["notes", "note", "occurrences", "upcoming", "trash"],
-  tags: ["tags", "notes", "note", "occurrences", "upcoming", "trash"],
+  notes: ["notes", "note", "occurrences", "upcoming", "trash", "matrix"],
+  tags: ["tags", "notes", "note", "occurrences", "upcoming", "trash", "matrix"],
   settings: ["me", "occurrences", "upcoming"],
   notification: ["notifications"],
   notification_shown: ["notifications"],
