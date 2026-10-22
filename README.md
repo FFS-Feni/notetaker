@@ -1,5 +1,7 @@
 # Notetaker
 
+[![tests](https://github.com/FFS-Feni/notetaker/actions/workflows/tests.yml/badge.svg)](https://github.com/FFS-Feni/notetaker/actions/workflows/tests.yml)
+
 Личные заметки, привязанные к дате и времени: календарь, теги, повторы, напоминания письмом и всплывающим уведомлением во всех открытых вкладках. Тестовое задание «Agentic Developer», задание 1.
 
 - **Backend:** Python 3.12, FastAPI, SQLAlchemy 2 (async), PostgreSQL 17.
