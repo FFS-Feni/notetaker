@@ -156,8 +156,14 @@ async def upcoming(user: User = Depends(current_user), db: AsyncSession = Depend
     end_today = datetime.combine(now.astimezone(zone).date() + timedelta(days=1), time(), zone).astimezone(UTC)
     week_end = max(now + timedelta(days=7), end_today)
     occs = await occurrences_for(db, user, now - timedelta(days=7), week_end)
+    focus = await db.scalars(
+        select(Note)
+        .where(Note.user_id == user.id, Note.deleted_at.is_(None), Note.focus_on == now.astimezone(zone).date())
+        .order_by(Note.start_at)
+    )
     return Upcoming(
         now=now,
+        focus=focus.all(),
         today=[occurrence_out(o) for o in occs if now <= o.start < end_today],
         week=[occurrence_out(o) for o in occs if end_today <= o.start < week_end],
         past=[occurrence_out(o) for o in reversed(occs) if o.start < now and o.is_active],

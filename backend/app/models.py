@@ -121,6 +121,11 @@ class Note(Base):
     created_at: Mapped[datetime] = _now()
     updated_at: Mapped[datetime] = _now()
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Матрица Эйзенхауэра: две независимые отметки → четыре квадранта.
+    important: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    urgent: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    # «Фокус дня»: в какой день (по поясу пользователя) заметка — одно из трёх главных дел.
+    focus_on: Mapped[date | None] = mapped_column(Date)
     # Серия, от которой отделили «начиная с этого дня».
     split_from: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("notes.id", ondelete="SET NULL"))
 

@@ -11,12 +11,12 @@ from app import clock
 from app.deps import current_user, get_db
 from app.events import emit
 from app.models import Note, User, note_tags
-from app.notes import check_version, get_note, purge_at, resolve_tags, touch
+from app.notes import check_focus_limit, check_version, get_note, purge_at, resolve_tags, touch
 from app.planner import replan
-from app.schemas import NoteIn, NoteOut, NotePage, NotePatch, TrashItem
+from app.schemas import Matrix, NoteIn, NoteOut, NotePage, NotePatch, Quadrant, TrashItem
 
 router = APIRouter(prefix="/api", tags=["заметки"])
-NOT_NULL = {"title", "body", "start_at", "is_active", "freq", "reminders"}
+NOT_NULL = {"title", "body", "start_at", "is_active", "freq", "reminders", "important", "urgent"}
 
 
 def _enc(value: datetime, note_id: uuid.UUID) -> str:
@@ -36,6 +36,8 @@ async def list_notes(
     q: str | None = None,
     tags: str | None = Query(None, description="id тегов через запятую — заметка с любым из них"),
     status: Literal["all", "active", "inactive"] = "all",
+    important: bool | None = None,
+    urgent: bool | None = None,
     frm: datetime | None = Query(None, alias="from"),
     to: datetime | None = None,
     sort: Literal["start", "updated"] = "start",
@@ -58,6 +60,10 @@ async def list_notes(
         stmt = stmt.where(exists().where(note_tags.c.note_id == Note.id, note_tags.c.tag_id.in_(tag_ids)))
     if status != "all":
         stmt = stmt.where(Note.is_active.is_(status == "active"))
+    if important is not None:
+        stmt = stmt.where(Note.important.is_(important))
+    if urgent is not None:
+        stmt = stmt.where(Note.urgent.is_(urgent))
     if frm or to:
         once = [Note.freq == "none"]
         repeating = [Note.freq != "none"]
@@ -101,11 +107,15 @@ async def create_note(data: NoteIn, user: User = Depends(current_user), db: Asyn
         freq=data.freq,
         until=data.until,
         reminders=data.reminders,
+        important=data.important,
+        urgent=data.urgent,
+        focus_on=data.focus_on,
         version=1,
         created_at=now,
         updated_at=now,
         tags=await resolve_tags(db, user, data.tag_ids),
     )
+    await check_focus_limit(db, user, data.focus_on, None)
     db.add(note)
     await db.flush()
     await replan(db, note, now)
@@ -125,6 +135,8 @@ async def update_note(note_id: uuid.UUID, data: NotePatch, user: User = Depends(
     if note.deleted_at is not None:
         raise HTTPException(409, "Заметка в корзине — сначала восстановите её")
     check_version(note, data.version)
+    if "focus_on" in data.model_fields_set:
+        await check_focus_limit(db, user, data.focus_on, note.id)
     now = clock.now()
     fields = data.model_dump(exclude_unset=True, exclude={"version", "tag_ids"})
     for key, value in fields.items():
@@ -152,6 +164,19 @@ async def trash_note(note_id: uuid.UUID, user: User = Depends(current_user), db:
         await replan(db, note, now)  # в корзине — напоминаний нет
         await emit(db, user.id, "notes", id=str(note.id))
         await db.commit()
+
+
+@router.get("/matrix", response_model=Matrix)
+async def matrix(limit: int = Query(50, ge=1, le=200), user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    """Активные заметки по квадрантам «важно × срочно». Сначала самые ранние — просроченное наверху."""
+    base = select(Note).where(Note.user_id == user.id, Note.deleted_at.is_(None), Note.is_active)
+    out = {}
+    for name, important, urgent in (("do", True, True), ("plan", True, False), ("delegate", False, True), ("drop", False, False)):
+        stmt = base.where(Note.important.is_(important), Note.urgent.is_(urgent))
+        total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
+        items = (await db.scalars(stmt.order_by(Note.start_at, Note.id).limit(limit))).all()
+        out[name] = Quadrant(total=total, items=items)
+    return Matrix(**out)
 
 
 @router.get("/trash", response_model=list[TrashItem])

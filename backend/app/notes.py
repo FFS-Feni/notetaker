@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timedelta
 
 from fastapi import HTTPException
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Note, Tag, User
@@ -13,6 +13,7 @@ from app.recurrence import MARGIN, Occurrence, expand
 from app.schemas import NoteOut, OccurrenceOut, TagOut
 
 TRASH_DAYS = 30
+FOCUS_LIMIT = 3  # «три главных дела на день» — больше уже не фокус
 
 
 async def get_note(db: AsyncSession, user: User, note_id: uuid.UUID, *, lock: bool = False) -> Note:
@@ -85,9 +86,22 @@ def occurrence_out(o: Occurrence) -> OccurrenceOut:
         is_active=o.is_active,
         freq=o.note.freq,
         tags=[TagOut.model_validate(t) for t in o.note.tags],
+        important=o.note.important,
+        urgent=o.note.urgent,
         version=o.note.version,
     )
 
 
 def purge_at(note: Note) -> datetime:
     return note.deleted_at + timedelta(days=TRASH_DAYS)
+
+
+async def check_focus_limit(db: AsyncSession, user: User, day, note_id: uuid.UUID | None) -> None:
+    if day is None:
+        return
+    stmt = select(func.count()).where(Note.user_id == user.id, Note.focus_on == day, Note.deleted_at.is_(None))
+    if note_id is not None:  # сама заметка не в счёт (повторная отметка того же дня)
+        stmt = stmt.where(Note.id != note_id)
+    taken = await db.scalar(stmt)
+    if taken >= FOCUS_LIMIT:
+        raise HTTPException(409, f"В фокусе дня уже {FOCUS_LIMIT} заметки — уберите одну, чтобы добавить новую")

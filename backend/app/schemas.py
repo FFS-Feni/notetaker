@@ -85,6 +85,9 @@ class NoteFields(BaseModel):
     until: date | None = None
     reminders: list[Offset] | None = None
     tag_ids: list[int] | None = None
+    important: bool | None = None
+    urgent: bool | None = None
+    focus_on: date | None = None  # день, когда заметка — одно из трёх главных дел
 
     @field_validator("title")
     @classmethod
@@ -107,6 +110,8 @@ class NoteIn(NoteFields):
     freq: Freq = "none"
     reminders: list[Offset] = []
     tag_ids: list[int] = []
+    important: bool = False
+    urgent: bool = False
 
     @model_validator(mode="after")
     def until_needs_freq(self):
@@ -130,6 +135,9 @@ class NoteOut(ORM):
     until: date | None
     reminders: list[int]
     tags: list[TagOut]
+    important: bool
+    urgent: bool
+    focus_on: date | None
     version: int
     created_at: datetime
     updated_at: datetime
@@ -156,6 +164,8 @@ class OccurrenceOut(BaseModel):
     is_active: bool
     freq: str
     tags: list[TagOut]
+    important: bool
+    urgent: bool
     version: int
 
 
@@ -169,9 +179,24 @@ class OccurrencePatch(BaseModel):
 
 class Upcoming(BaseModel):
     now: datetime
+    focus: list[NoteOut]  # «Фокус дня» — до трёх главных дел на сегодня
     today: list[OccurrenceOut]
     week: list[OccurrenceOut]
     past: list[OccurrenceOut]
+
+
+class Quadrant(BaseModel):
+    total: int
+    items: list[NoteOut]
+
+
+class Matrix(BaseModel):
+    """Матрица Эйзенхауэра: do — важно и срочно, plan — важно, delegate — срочно, drop — ни то ни другое."""
+
+    do: Quadrant
+    plan: Quadrant
+    delegate: Quadrant
+    drop: Quadrant
 
 
 class NotificationOut(ORM):
