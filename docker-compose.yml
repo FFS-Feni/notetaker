@@ -19,7 +19,7 @@ services:
       retries: 30
 
   backend:
-    build: { context: ./backend, network: host }
+    build: { context: ./backend, network: "${BUILD_NETWORK:-default}" }
     environment: &backend-env
       DATABASE_URL: postgresql+asyncpg://notetaker:notetaker@db:5432/notetaker
       SMTP_HOST: mailpit
@@ -35,7 +35,7 @@ services:
       retries: 20
 
   worker:
-    build: { context: ./backend, network: host }
+    build: { context: ./backend, network: "${BUILD_NETWORK:-default}" }
     command: ["python", "-m", "app.worker"]
     environment: *backend-env
     depends_on:
@@ -43,7 +43,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    build: { context: ./frontend, network: host }
+    build: { context: ./frontend, network: "${BUILD_NETWORK:-default}" }
     environment:
       API_URL: http://backend:8000
     depends_on:

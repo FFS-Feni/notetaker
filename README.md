@@ -31,6 +31,8 @@ make up          # или: docker compose up -d --build --wait
 | http://localhost:8025 | Mailpit — все отправленные письма |
 | http://localhost:8000/docs | документация API |
 
+Если при сборке внутри Docker нет интернета (pip или npm не могут скачать пакеты), запустите так: `BUILD_NETWORK=host make up`.
+
 Backend сам применяет миграции при старте и создаёт демо-аккаунт с примерами: повторы, теги, прошедшая заметка, заметка в корзине.
 
 ```bash
