@@ -21,7 +21,7 @@ import { Login } from "./pages/Login";
 const CalendarPage = lazy(() => import("./pages/CalendarPage").then((m) => ({ default: m.CalendarPage })));
 const NotesPage = lazy(() => import("./pages/NotesPage").then((m) => ({ default: m.NotesPage })));
 const UpcomingPage = lazy(() => import("./pages/UpcomingPage").then((m) => ({ default: m.UpcomingPage })));
-const MatrixPage = lazy(() => import("./pages/MatrixPage").then((m) => ({ default: m.MatrixPage })));
+const TasksPage = lazy(() => import("./pages/TasksPage").then((m) => ({ default: m.TasksPage })));
 const TrashPage = lazy(() => import("./pages/TrashPage").then((m) => ({ default: m.TrashPage })));
 const TagsPage = lazy(() => import("./pages/TagsPage").then((m) => ({ default: m.TagsPage })));
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
@@ -37,6 +37,12 @@ const theme = createTheme({
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: (n, e) => !(e instanceof ApiError && e.status < 500) && n < 2, refetchOnWindowFocus: false } },
 });
+
+// «matrix» — старое имя доски; без приоритетов доски нет — открываем «Ближайшее».
+const startPage = (p: User["prefs"]) => {
+  const page = p.start_page === "matrix" ? "tasks" : p.start_page;
+  return page === "tasks" && !p.priorities ? "upcoming" : page;
+};
 
 function App() {
   const me = useQuery({ queryKey: ["me"], queryFn: () => api<User>("/me") });
@@ -63,11 +69,12 @@ function App() {
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/notes" element={<NotesPage />} />
           <Route path="/upcoming" element={<UpcomingPage />} />
-          {prefs.priorities && <Route path="/matrix" element={<MatrixPage />} />}
+          {prefs.priorities && <Route path="/tasks" element={<TasksPage />} />}
+          <Route path="/matrix" element={<Navigate to="/tasks" replace />} />
           <Route path="/trash" element={<TrashPage />} />
           <Route path="/tags" element={<TagsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
-          <Route path="*" element={<Navigate to={`/${prefs.start_page === "matrix" && !prefs.priorities ? "calendar" : prefs.start_page}`} replace />} />
+          <Route path="*" element={<Navigate to={`/${startPage(prefs)}`} replace />} />
         </Routes>
         </Suspense>
       </Layout>

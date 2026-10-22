@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from app import clock
 from app.config import settings
 from app.db import Session
-from app.models import Note, Tag, User
+from app.models import Note, NoteEvent, Tag, User
 from app.planner import replan
 from app.security import hash_password
 
@@ -43,24 +43,28 @@ async def ensure_demo() -> None:
         )
         db.add_all([work, home, health, study])
         soon = (now + timedelta(minutes=75)).replace(second=0, microsecond=0)
-        specs = [  # заголовок, текст, начало, повтор, напоминания, теги, активна, удалена, важно, срочно, в фокусе
-            ("Планёрка", "Короткий созвон команды.", at(-3, 9), "daily", [10], [work], True, None, False, False, False),
-            ("Встреча с подрядчиком", "Обсудить сроки и смету.", soon, "none", [10, 60], [work], True, None, True, True, True),
-            ("Тренировка", "", at(1, 19), "weekly", [60], [health], True, None, True, False, False),
-            ("Оплатить интернет", "Личный кабинет провайдера.", at(3, 10), "monthly", [1440], [home], True, None, False, True, False),
-            ("Сдать отчёт", "Квартальный отчёт.", at(4, 12), "none", [1440, 60], [work, study], True, None, True, False, True),
-            ("Купить лекарство", "", at(-1, 18), "none", [], [health], True, None, False, True, False),
-            ("Позвонить в банк", "Уточнить про банковскую карту.", at(2, 11), "none", [10], [home], False, None, False, False, False),
-            ("Старый список покупок", "Молоко, хлеб.", at(-5, 12), "none", [], [home], True, now - timedelta(days=3), False, False, False),
+        specs = [  # заголовок, текст, начало, повтор, напоминания, теги, активна, удалена, важно, срочно, в фокусе, цвет
+            ("Планёрка", "Короткий созвон команды.", at(-3, 9), "daily", [10], [work], True, None, False, False, False, "blue"),
+            ("Встреча с подрядчиком", "Обсудить сроки и смету.", soon, "none", [10, 60], [work], True, None, True, True, True, "red"),
+            ("Тренировка", "", at(1, 19), "weekly", [60], [health], True, None, True, False, False, "teal"),
+            ("Оплатить интернет", "Личный кабинет провайдера.", at(3, 10), "monthly", [1440], [home], True, None, False, True, False, "orange"),
+            ("Сдать отчёт", "Квартальный отчёт.", at(4, 12), "none", [1440, 60], [work, study], True, None, True, False, True, "blue"),
+            ("Купить лекарство", "", at(-1, 18), "none", [], [health], True, None, False, True, False, "teal"),
+            ("Записаться к стоматологу", "", at(1, 10), "none", [60], [health], True, None, False, False, False, "teal"),
+            ("Прочитать статью про планирование", "", at(2, 20), "none", [], [study], True, None, False, False, False, "violet"),
+            ("Позвонить в банк", "Уточнить про банковскую карту.", at(2, 11), "none", [10], [home], False, None, False, False, False, "green"),
+            ("Старый список покупок", "Молоко, хлеб.", at(-5, 12), "none", [], [home], True, now - timedelta(days=3), False, False, False, "gray"),
         ]
-        for title, body, start, freq, reminders, tags, active, deleted, important, urgent, focus in specs:
+        for title, body, start, freq, reminders, tags, active, deleted, important, urgent, focus, color in specs:
             note = Note(
                 user_id=user.id, title=title, body=body, start_at=start, tz=tz, is_active=active, freq=freq,
                 reminders=reminders, version=1, created_at=now, updated_at=now, deleted_at=deleted, tags=tags,
-                important=important, urgent=urgent, focus_on=today if focus else None,
+                important=important, urgent=urgent, focus_on=today if focus else None, color=color,
+                triaged=important or urgent or title == "Оплатить интернет",
             )
             db.add(note)
             await db.flush()
             await replan(db, note, now)
+            db.add(NoteEvent(note_id=note.id, user_id=user.id, at=now, action="created", changes={}, device="демо-данные"))
         await db.commit()
         log.info("создан демо-аккаунт %s", DEMO_EMAIL)

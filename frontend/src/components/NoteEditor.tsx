@@ -20,6 +20,8 @@ import { DateTime } from "luxon";
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError, occPath, type Freq, type Note, type Tag } from "../api";
 import { useApp, type EditorTarget } from "../context";
+import { ColorPicker } from "./ColorPicker";
+import { NoteHistory } from "./NoteHistory";
 import { FREQ_LABEL, fmt, fromWall, REMINDER_LABEL, toWall } from "../time";
 
 type Form = {
@@ -33,6 +35,7 @@ type Form = {
   tag_ids: string[];
   important: boolean;
   urgent: boolean;
+  color: string | null;
 };
 type Scope = "this" | "following" | "all";
 
@@ -53,7 +56,7 @@ function formFrom(note: Note | undefined, target: EditorTarget, tz: string, defa
       target.kind === "new" && target.start
         ? target.start
         : DateTime.now().setZone(tz).plus({ hours: 1 }).startOf("hour").toFormat("yyyy-MM-dd HH:mm:ss");
-    return { title: "", body: "", start, is_active: true, freq: "none", until: null, reminders: defaultReminders.map(String), tag_ids: [], important: false, urgent: false };
+    return { title: "", body: "", start, is_active: true, freq: "none", until: null, reminders: defaultReminders.map(String), tag_ids: [], important: false, urgent: false, color: null };
   }
   const occ = target.kind === "occ" ? target.occ : null;
   return {
@@ -67,6 +70,7 @@ function formFrom(note: Note | undefined, target: EditorTarget, tz: string, defa
     tag_ids: note.tags.map((t) => String(t.id)),
     important: note.important,
     urgent: note.urgent,
+    color: note.color,
   };
 }
 
@@ -166,6 +170,7 @@ export function NoteEditor({ target, onClose }: { target: EditorTarget; onClose:
       tag_ids: form.tag_ids.map(Number),
       important: form.important,
       urgent: form.urgent,
+      color: form.color,
     };
     if (target.kind === "new")
       return run(() => api("/notes", { method: "POST", body: { ...series, start_at } }), "Заметка создана");
@@ -277,6 +282,10 @@ export function NoteEditor({ target, onClose }: { target: EditorTarget; onClose:
                 />
               )}
             </Group>
+            <div>
+              <Text size="sm" fw={500} mb={6}>Цвет</Text>
+              <ColorPicker value={form.color} onChange={(v) => set("color", v)} />
+            </div>
             {prefs.priorities && <div>
               <Text size="sm" fw={500} mb={4}>Приоритет</Text>
               <Group gap="xs">
@@ -319,6 +328,7 @@ export function NoteEditor({ target, onClose }: { target: EditorTarget; onClose:
             <Button onClick={save} loading={busy} disabled={!form.title.trim() || !!theirs}>Сохранить</Button>
           </Group>
         </Group>
+        {noteId && <NoteHistory noteId={noteId} />}
       </Stack>
     </Modal>
   );

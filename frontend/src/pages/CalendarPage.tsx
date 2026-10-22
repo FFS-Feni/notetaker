@@ -11,6 +11,7 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { DateTime } from "luxon";
 import { useState } from "react";
 import { api, ApiError, occPath, type Occurrence } from "../api";
+import { colorInk, taskHex } from "../colors";
 import { useApp } from "../context";
 
 export function CalendarPage() {
@@ -57,11 +58,14 @@ export function CalendarPage() {
         slotMaxTime={`${String(user.prefs.day_end).padStart(2, "0")}:00:00`}
         headerToolbar={mobile
           ? { left: "prev,next", center: "title", right: "today" }
-          : { left: "prev,next today", center: "title", right: "dayGridMonth,timeGridWeek,timeGridDay" }}
-        footerToolbar={mobile ? { center: "dayGridMonth,timeGridWeek,timeGridDay" } : undefined}
+          : { left: "prev,next today", center: "title", right: "dayGridTwoWeeks,dayGridMonth,timeGridWeek,timeGridDay" }}
+        footerToolbar={mobile ? { center: "dayGridTwoWeeks,timeGridWeek,timeGridDay" } : undefined}
+        // «2 недели»: крупные ячейки — задачи читаются целиком, а не обрезками.
+        views={{ dayGridTwoWeeks: { type: "dayGrid", duration: { weeks: 2 }, buttonText: "2 недели", dayMaxEvents: 7 } }}
         scrollTime="08:00:00"
         height="auto"
         dayMaxEvents={4}
+        displayEventEnd={false}
         eventDisplay="block"
         allDaySlot={false}
         nowIndicator
@@ -75,9 +79,9 @@ export function CalendarPage() {
           title: (user.prefs.priorities && o.important ? "❗ " : "") + o.title + (o.freq !== "none" ? " ↻" : ""),
           start: o.start,
           allDay: false,
-          backgroundColor: o.is_active ? (o.tags[0]?.color ?? "#5cb0ee") : "transparent",
-          borderColor: o.tags[0]?.color ?? "#5cb0ee",
-          textColor: "#111",
+          backgroundColor: o.is_active ? (taskHex(o) ?? "#5c7cfa") : "transparent",
+          borderColor: taskHex(o) ?? "#5c7cfa",
+          textColor: o.color ? colorInk(o.color) : "#fff",
           classNames: o.is_active ? [] : ["nt-inactive"],
           extendedProps: { occ: o },
         }))}

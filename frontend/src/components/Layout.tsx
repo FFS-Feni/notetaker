@@ -78,14 +78,14 @@ export function Layout({ children }: { children: ReactNode }) {
       [
         { to: "/upcoming", label: "Ближайшее", icon: "sun", count: upcoming.data?.today.length, alert: !!upcoming.data?.past.length },
         { to: "/calendar", label: "Календарь", icon: "calendar" },
-        ...(user.prefs.priorities ? [{ to: "/matrix", label: "Матрица", icon: "matrix" as const }] : []),
+        ...(user.prefs.priorities ? [{ to: "/tasks", label: "Задачи", icon: "matrix" as const }] : []),
       ],
     ],
     [
       "Заметки",
       [
         { to: "/notes", label: "Список", icon: "list" },
-        { to: "/tags", label: "Теги", icon: "tag" },
+        { to: "/tags", label: "Цвета и теги", icon: "tag" },
         { to: "/trash", label: "Корзина", icon: "trash", count: trash.data?.length },
       ],
     ],

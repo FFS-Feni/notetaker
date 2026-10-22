@@ -44,15 +44,18 @@ export type Prefs = {
   popup_reminders: boolean;
   focus_limit: number;
   default_reminders: number[];
-  calendar_view: "dayGridMonth" | "timeGridWeek" | "timeGridDay";
+  calendar_view: "dayGridTwoWeeks" | "dayGridMonth" | "timeGridWeek" | "timeGridDay";
   week_start: 0 | 1;
   day_start: number;
   day_end: number;
-  start_page: "calendar" | "notes" | "upcoming" | "matrix";
+  start_page: "calendar" | "notes" | "upcoming" | "tasks" | "matrix";
   theme: "auto" | "light" | "dark";
+  upcoming_sections: Section[];
+  color_labels: Record<string, string>;
 };
-export type User = { id: number; email: string; timezone: string; prefs: Prefs };
-export type Tag = { id: number; name: string; color: string };
+export type Section = "focus" | "today" | "tomorrow" | "week" | "past";
+export type User = { id: number; email: string; name: string; timezone: string; prefs: Prefs };
+export type Tag = { id: number; name: string; color: string; count?: number };
 export type Freq = "none" | "daily" | "weekly" | "monthly";
 export type Note = {
   id: string;
@@ -68,6 +71,8 @@ export type Note = {
   important: boolean;
   urgent: boolean;
   focus_on: string | null;
+  color: string | null;
+  triaged: boolean;
   version: number;
   created_at: string;
   updated_at: string;
@@ -87,11 +92,13 @@ export type Occurrence = {
   tags: Tag[];
   important: boolean;
   urgent: boolean;
+  color: string | null;
   version: number;
 };
 export type Quadrant = { total: number; items: Note[] };
 export type Matrix = { do: Quadrant; plan: Quadrant; delegate: Quadrant; drop: Quadrant };
-export type Upcoming = { now: string; focus: Note[]; today: Occurrence[]; week: Occurrence[]; past: Occurrence[] };
+export type Upcoming = { now: string; focus: Note[]; today: Occurrence[]; tomorrow: Occurrence[]; week: Occurrence[]; past: Occurrence[] };
+export type NoteEvent = { id: number; at: string; action: string; changes: Record<string, unknown>; device: string; user_name: string };
 export type AppNotification = {
   id: number;
   kind: "reminder" | "missed";

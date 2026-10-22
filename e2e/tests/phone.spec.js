@@ -15,9 +15,9 @@ test("телефон: создать заметку, увидеть в кале�
   await page.getByRole("link", { name: "Календарь" }).click();
   await expect(page.locator(".fc-timeGridDay-view")).toBeVisible();
 
-  // Матрица на телефоне: перетаскивания пальцем нет — меню «Переместить в».
-  await page.goto("/matrix");
-  const card = page.getByTestId("quadrant-drop").getByTestId("matrix-card").filter({ hasText: title });
+  // Доска «Задачи» на телефоне: перетаскивания пальцем нет — меню «Переместить в».
+  await page.goto("/tasks");
+  const card = page.getByTestId("inbox").getByTestId("task-card").filter({ hasText: title });
   await card.getByRole("button", { name: "Переместить" }).click();
   await page.getByRole("menuitem", { name: "Сделать сейчас" }).click();
   await expect(page.getByTestId("quadrant-do").getByText(title)).toBeVisible();

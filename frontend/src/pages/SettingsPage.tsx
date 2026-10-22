@@ -24,6 +24,7 @@ export function SettingsPage() {
   const qc = useQueryClient();
   const p = user.prefs;
   const [email, setEmail] = useState(user.email);
+  const [name, setName] = useState(user.name);
   const [timezone, setTimezone] = useState(user.timezone);
   const [hours, setHours] = useState<[number, number]>([p.day_start, p.day_end]);
 
@@ -48,8 +49,9 @@ export function SettingsPage() {
       <PageHeader title="Настройки" hint="Всё сохраняется сразу и применяется во всех открытых вкладках и на других устройствах" />
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
         <Section title="Профиль">
-          <form onSubmit={(e) => { e.preventDefault(); send({ email, timezone }, "Профиль сохранён"); }}>
+          <form onSubmit={(e) => { e.preventDefault(); send({ email, timezone, name }, "Профиль сохранён"); }}>
             <Stack gap="sm">
+              <TextInput label="Имя" description="Так вы подписаны в истории изменений заметок" value={name} onChange={(e) => setName(e.currentTarget.value)} />
               <TextInput label="Почта" description="Сюда приходят письма-напоминания" type="email" value={email} onChange={(e) => setEmail(e.currentTarget.value)} required />
               <Group align="flex-end" wrap="nowrap">
                 <Select style={{ flex: 1 }} label="Часовой пояс" searchable data={ZONES.includes(timezone) ? ZONES : [timezone, ...ZONES]} value={timezone} onChange={(v) => v && setTimezone(v)} allowDeselect={false} />
@@ -62,7 +64,7 @@ export function SettingsPage() {
         </Section>
 
         <Section title="Функции" hint="Выключенная функция пропадает из интерфейса; данные при этом сохраняются.">
-          {feature("priorities", "Приоритеты и «Матрица»", "Отметки «Важно» и «Срочно», экран из четырёх квадрантов, фильтр в списке")}
+          {feature("priorities", "Доска «Задачи»", "Неразобранные задачи и четыре блока «важно × срочно», отметки на карточках, фильтр в списке")}
           {feature("focus", "Фокус дня", `До ${p.focus_limit} главных дел на сегодня — сверху в «Ближайшем»`)}
           {feature("email_reminders", "Письма-напоминания", "Письмо на почту в момент напоминания (уведомление в интерфейсе остаётся)")}
           {feature("popup_reminders", "Всплывающие уведомления", "Уведомление во всех открытых вкладках в момент напоминания")}
@@ -84,7 +86,7 @@ export function SettingsPage() {
         <Section title="Календарь">
           <Select label="Вид при открытии" value={p.calendar_view} allowDeselect={false}
             onChange={(v) => v && set("calendar_view", v as Prefs["calendar_view"])}
-            data={[{ value: "dayGridMonth", label: "Месяц" }, { value: "timeGridWeek", label: "Неделя" }, { value: "timeGridDay", label: "День" }]} />
+            data={[{ value: "dayGridTwoWeeks", label: "2 недели" }, { value: "dayGridMonth", label: "Месяц" }, { value: "timeGridWeek", label: "Неделя" }, { value: "timeGridDay", label: "День" }]} />
           <div>
             <Text size="sm" fw={500} mb={4}>Неделя начинается с</Text>
             <SegmentedControl value={String(p.week_start)} onChange={(v) => set("week_start", Number(v) as 0 | 1)}
@@ -99,13 +101,13 @@ export function SettingsPage() {
         </Section>
 
         <Section title="Общее">
-          <Select label="Стартовая страница" value={p.start_page} allowDeselect={false}
+          <Select label="Стартовая страница" value={p.start_page === "matrix" ? "tasks" : p.start_page} allowDeselect={false}
             onChange={(v) => v && set("start_page", v as Prefs["start_page"])}
             data={[
               { value: "calendar", label: "Календарь" },
               { value: "notes", label: "Список" },
               { value: "upcoming", label: "Ближайшее" },
-              ...(p.priorities ? [{ value: "matrix", label: "Матрица" }] : []),
+              ...(p.priorities ? [{ value: "tasks", label: "Задачи" }] : []),
             ]} />
           <div>
             <Text size="sm" fw={500} mb={4}>Тема</Text>

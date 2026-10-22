@@ -1,13 +1,23 @@
-import { ActionIcon, Badge, Button, Group, Paper, SimpleGrid, Stack, Text, Title, Tooltip } from "@mantine/core";
-import { PageHeader } from "../components/PageHeader";
+import { ActionIcon, Badge, Button, Chip, Group, Paper, SimpleGrid, Stack, Text, Title, Tooltip } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DateTime } from "luxon";
 import { useEffect, useMemo, useState } from "react";
-import { api, occPath, type Note, type Occurrence, type Upcoming } from "../api";
-import { setFocus, todayIn } from "../priority";
+import { api, occPath, type Note, type Occurrence, type Section, type Upcoming } from "../api";
+import { ColorDot } from "../components/ColorPicker";
+import { PageHeader } from "../components/PageHeader";
+import { TaskCard } from "../components/TaskCard";
 import { useApp } from "../context";
+import { setFocus, todayIn } from "../priority";
 import { fmt, ms } from "../time";
+
+const SECTIONS: { key: Section; label: string; empty: string }[] = [
+  { key: "focus", label: "★ Фокус дня", empty: "" },
+  { key: "today", label: "Сегодня", empty: "На сегодня больше ничего." },
+  { key: "tomorrow", label: "Завтра", empty: "На завтра пока пусто." },
+  { key: "week", label: "На неделе", empty: "Дальше на неделе ничего." },
+  { key: "past", label: "Прошедшие", empty: "Всё прошедшее отмечено. Отлично!" },
+];
 
 export function UpcomingPage() {
   const { user, openEditor } = useApp();
@@ -15,16 +25,26 @@ export function UpcomingPage() {
   // Раз в минуту — сверка с сервером (на случай, если компьютер спал).
   const data = useQuery({ queryKey: ["upcoming"], queryFn: () => api<Upcoming>("/upcoming"), refetchInterval: 60_000 });
   const [now, setNow] = useState(Date.now());
+  const shown = user.prefs.upcoming_sections.filter((s) => s !== "focus" || user.prefs.focus);
+  const today_ = todayIn(user.timezone);
+  const limit = user.prefs.focus_limit;
 
   const all = useMemo(() => {
     const seen = new Map<string, Occurrence>();
-    for (const o of [...(data.data?.past ?? []), ...(data.data?.today ?? []), ...(data.data?.week ?? [])]) seen.set(o.id, o);
+    for (const k of ["past", "today", "tomorrow", "week"] as const) for (const o of data.data?.[k] ?? []) seen.set(o.id, o);
     return [...seen.values()].sort((a, b) => ms(a.start) - ms(b.start));
   }, [data.data]);
-  const endToday = DateTime.fromMillis(now).setZone(user.timezone).startOf("day").plus({ days: 1 }).toMillis();
-  const today = all.filter((o) => ms(o.start) >= now && ms(o.start) < endToday);
-  const week = all.filter((o) => ms(o.start) >= endToday);
-  const past = all.filter((o) => ms(o.start) < now && o.is_active).reverse();
+  const day0 = DateTime.fromMillis(now).setZone(user.timezone).startOf("day");
+  const endToday = day0.plus({ days: 1 }).toMillis();
+  const endTomorrow = day0.plus({ days: 2 }).toMillis();
+  const lists: Record<Exclude<Section, "focus">, Occurrence[]> = {
+    today: all.filter((o) => ms(o.start) >= now && ms(o.start) < endToday),
+    tomorrow: all.filter((o) => ms(o.start) >= endToday && ms(o.start) < endTomorrow),
+    week: all.filter((o) => ms(o.start) >= endTomorrow),
+    past: all.filter((o) => ms(o.start) < now && o.is_active).reverse(),
+  };
+  const focus = data.data?.focus ?? [];
+  const focusIds = new Set(focus.map((n) => n.id));
 
   // Таймер на ближайшее время начала: в эту секунду заметка переезжает в «прошедшие» без обновления страницы.
   useEffect(() => {
@@ -33,20 +53,6 @@ export function UpcomingPage() {
     return () => clearTimeout(timer);
   }, [all, now, endToday]);
 
-  const deactivate = async (o: Occurrence) => {
-    try {
-      if (o.freq === "none") await api(`/notes/${o.note_id}`, { method: "PATCH", body: { version: o.version, is_active: false } });
-      else await api(occPath(o), { method: "PATCH", params: { scope: "this" }, body: { version: o.version, is_active: false } });
-    } catch (e) {
-      notifications.show({ color: "red", message: (e as Error).message });
-    }
-    qc.invalidateQueries();
-  };
-
-  const today_ = todayIn(user.timezone);
-  const { focus: focusOn, focus_limit: limit, priorities } = user.prefs;
-  const focus = data.data?.focus ?? [];
-  const focusIds = new Set(focus.map((n) => n.id));
   const run = async (fn: () => Promise<unknown>) => {
     try {
       await fn();
@@ -55,84 +61,104 @@ export function UpcomingPage() {
     }
     qc.invalidateQueries();
   };
-  const toggleFocus = (n: { note_id?: string; id: string; version: number }) => {
-    const id = n.note_id ?? n.id;
-    return run(() => setFocus({ id, version: n.version }, focusIds.has(id) ? null : today_));
-  };
-  const done = (n: Note) => run(() => api(`/notes/${n.id}`, { method: "PATCH", body: { version: n.version, is_active: !n.is_active } }));
+  const setSections = (v: string[]) =>
+    run(() => api("/settings", { method: "PATCH", body: { prefs: { upcoming_sections: SECTIONS.map((s) => s.key).filter((k) => v.includes(k)) } } }));
+  const toggleFocus = (id: string, version: number) => run(() => setFocus({ id, version }, focusIds.has(id) ? null : today_));
+  // Вхождение повтора отмечаем отдельно, обычную заметку — целиком.
+  const done = (o: Occurrence) =>
+    run(() =>
+      o.freq === "none"
+        ? api(`/notes/${o.note_id}`, { method: "PATCH", body: { version: o.version, is_active: false } })
+        : api(occPath(o), { method: "PATCH", params: { scope: "this" }, body: { version: o.version, is_active: false } }),
+    );
+  const recolor = (noteId: string, version: number, color: string | null) =>
+    run(() => api(`/notes/${noteId}`, { method: "PATCH", body: { version, color } }));
 
-  const column = (title: string, list: Occurrence[], empty: string, isPast = false) => (
-    <Stack gap="xs" data-testid={`column-${title}`}>
-      <Title order={5}>{title} <Text span c="dimmed" size="sm">{list.length}</Text></Title>
-      {list.length === 0 && <Text size="sm" c="dimmed">{empty}</Text>}
-      {list.map((o) => (
-        <Paper key={o.id} withBorder p="xs" radius="md" style={{ opacity: o.is_active ? 1 : 0.55, cursor: "pointer" }}
-          onClick={() => openEditor(o.freq === "none" ? { kind: "note", id: o.note_id } : { kind: "occ", occ: o })}>
-          <Text size="xs" c="dimmed">{fmt(o.start, user.timezone, isPast || title === "На неделе" ? "ccc, d MMM · HH:mm" : "HH:mm")}{o.freq !== "none" ? " · ↻" : ""}{o.is_active ? "" : " · неактивна"}</Text>
-          <Group justify="space-between" wrap="nowrap" gap={4}>
-            <Text fw={600}>{priorities && o.important ? "❗ " : ""}{o.title}</Text>
-            {focusOn && <Tooltip label={focusIds.has(o.note_id) ? "Убрать из фокуса дня" : "В фокус дня"}>
-              <ActionIcon variant="subtle" color="yellow" aria-label="Фокус дня" onClick={(e) => { e.stopPropagation(); toggleFocus(o); }}>
+  const occCard = (o: Occurrence, key: Section) => (
+    <TaskCard
+      key={o.id}
+      task={o}
+      when={fmt(o.start, user.timezone, key === "today" || key === "tomorrow" ? "HH:mm" : "ccc d MMM · HH:mm")}
+      onClick={() => openEditor(o.freq === "none" ? { kind: "note", id: o.note_id } : { kind: "occ", occ: o })}
+      actions={
+        <>
+          <ColorDot value={o.color} onChange={(c) => recolor(o.note_id, o.version, c)} />
+          {user.prefs.focus && (
+            <Tooltip label={focusIds.has(o.note_id) ? "Убрать из фокуса дня" : "В фокус дня"}>
+              <ActionIcon variant="subtle" color="yellow" aria-label="Фокус дня" onClick={() => toggleFocus(o.note_id, o.version)}>
                 {focusIds.has(o.note_id) ? "★" : "☆"}
               </ActionIcon>
-            </Tooltip>}
-          </Group>
-          <Group gap={4} mt={2}>
-            {o.tags.map((t) => <Badge key={t.id} size="xs" variant="light" color={t.color}>{t.name}</Badge>)}
-          </Group>
-          {isPast && (
-            <Button size="xs" variant="light" color="teal" mt={6} leftSection="✓" onClick={(e) => { e.stopPropagation(); deactivate(o); }}>
-              Готово
-            </Button>
+            </Tooltip>
           )}
-        </Paper>
-      ))}
-    </Stack>
+        </>
+      }
+      footer={key === "past" ? <Button size="compact-xs" variant="light" color="teal" onClick={() => done(o)}>✓ Готово</Button> : undefined}
+    />
   );
 
-  const stat = (label: string, value: string | number, color: string, hint: string) => (
-    <Paper withBorder p="sm" radius="md">
-      <Text size="xs" c="dimmed" tt="uppercase" fw={700}>{label}</Text>
-      <Text fw={800} fz={28} c={color} lh={1.2}>{value}</Text>
-      <Text size="xs" c="dimmed">{hint}</Text>
-    </Paper>
-  );
-
+  const columns = shown.filter((s): s is Exclude<Section, "focus"> => s !== "focus");
   return (
-    <Stack gap="lg">
-    <PageHeader title="Ближайшее" hint={`Что впереди и что требует внимания · ${DateTime.fromMillis(now).setZone(user.timezone).setLocale("ru").toFormat("cccc, d MMMM")}`} />
-    <SimpleGrid cols={{ base: 2, sm: focusOn ? 4 : 3 }} spacing="sm" mt={-8}>
-      {stat("Сегодня", today.length, "indigo", "до конца дня")}
-      {stat("На неделе", week.length, "cyan", "следующие 7 дней")}
-      {stat("Прошло", past.length, past.length ? "orange" : "teal", past.length ? "активные — отметьте или перенесите" : "всё отмечено")}
-      {focusOn && stat("Фокус дня", `${focus.length}/${limit}`, "yellow.7", "главные дела на сегодня")}
-    </SimpleGrid>
-    {focusOn && <Paper withBorder radius="md" p="sm" data-testid="focus" style={{ borderLeft: "4px solid var(--mantine-color-yellow-5)" }}>
-      <Group justify="space-between" mb={6}>
-        <Title order={5}>★ Фокус дня <Text span c="dimmed" size="sm">{focus.length} из {limit}</Text></Title>
-        <Text size="xs" c="dimmed">Главные дела на сегодня — сделать их в первую очередь</Text>
-      </Group>
-      {focus.length === 0 && <Text size="sm" c="dimmed">Нажмите ☆ у заметки ниже или в «Матрице», чтобы выбрать главное на сегодня.</Text>}
-      <Stack gap={6}>
-        {focus.map((n) => (
-          <Group key={n.id} justify="space-between" wrap="nowrap">
-            <Text fw={600} td={n.is_active ? undefined : "line-through"} c={n.is_active ? undefined : "dimmed"} style={{ cursor: "pointer" }}
-              onClick={() => openEditor({ kind: "note", id: n.id })}>
-              {n.important ? "❗ " : ""}{n.title} <Text span size="xs" c="dimmed">· {fmt(n.start_at, user.timezone, "HH:mm")}</Text>
-            </Text>
-            <Group gap={6} wrap="nowrap">
-              <Button size="xs" variant={n.is_active ? "light" : "default"} color="teal" onClick={() => done(n)}>{n.is_active ? "Готово" : "Вернуть"}</Button>
-              <Button size="xs" variant="subtle" color="gray" onClick={() => toggleFocus(n)}>Убрать</Button>
-            </Group>
+    <Stack gap="md">
+      <PageHeader title="Ближайшее" hint={DateTime.fromMillis(now).setZone(user.timezone).setLocale("ru").toFormat("cccc, d MMMM")}>
+        <Chip.Group multiple value={shown} onChange={setSections}>
+          <Group gap={6}>
+            {SECTIONS.filter((s) => s.key !== "focus" || user.prefs.focus).map((s) => (
+              <Chip key={s.key} value={s.key} size="sm" variant="outline">
+                {s.label}{s.key !== "focus" ? ` ${lists[s.key as Exclude<Section, "focus">].length}` : ` ${focus.length}/${limit}`}
+              </Chip>
+            ))}
           </Group>
-        ))}
-      </Stack>
-    </Paper>}
-    <SimpleGrid cols={{ base: 1, md: 3 }} spacing="lg">
-      {column("Сегодня", today, "На сегодня больше ничего.")}
-      {column("На неделе", week, "На ближайшие 7 дней ничего.")}
-      {column("Прошедшие активные", past, "Всё прошедшее отмечено. Отлично!", true)}
-    </SimpleGrid>
+        </Chip.Group>
+      </PageHeader>
+
+      {shown.includes("focus") && (
+        <Paper withBorder radius="lg" p="md" data-testid="focus" style={{ borderLeft: "5px solid var(--mantine-color-yellow-5)" }}>
+          <Group justify="space-between" mb="xs">
+            <Title order={4}>★ Фокус дня <Text span c="dimmed" size="sm">{focus.length} из {limit}</Text></Title>
+            <Text size="xs" c="dimmed">Главные дела на сегодня — сделать в первую очередь</Text>
+          </Group>
+          {focus.length === 0 && <Text size="sm" c="dimmed">Нажмите ☆ у задачи ниже или на доске «Задачи», чтобы выбрать главное.</Text>}
+          <SimpleGrid cols={{ base: 1, sm: Math.min(3, Math.max(1, focus.length)) }} spacing="sm">
+            {focus.map((n: Note) => (
+              <TaskCard
+                key={n.id}
+                task={n}
+                when={fmt(n.start_at, user.timezone, "HH:mm")}
+                onClick={() => openEditor({ kind: "note", id: n.id })}
+                actions={
+                  <>
+                    <Button size="compact-xs" variant={n.is_active ? "light" : "default"} color="teal"
+                      onClick={() => run(() => api(`/notes/${n.id}`, { method: "PATCH", body: { version: n.version, is_active: !n.is_active } }))}>
+                      {n.is_active ? "✓ Готово" : "Вернуть"}
+                    </Button>
+                    <Button size="compact-xs" variant="subtle" color="gray" onClick={() => toggleFocus(n.id, n.version)}>Убрать</Button>
+                  </>
+                }
+              />
+            ))}
+          </SimpleGrid>
+        </Paper>
+      )}
+
+      {columns.length === 0 && !shown.includes("focus") && (
+        <Paper withBorder p="xl" ta="center"><Text c="dimmed">Выберите вверху, что показывать.</Text></Paper>
+      )}
+      <SimpleGrid cols={{ base: 1, sm: Math.min(2, columns.length || 1), lg: Math.min(4, columns.length || 1) }} spacing="md">
+        {columns.map((key) => {
+          const s = SECTIONS.find((x) => x.key === key)!;
+          const list = lists[key];
+          return (
+            <Stack key={key} gap={8} data-testid={`column-${s.label}`}>
+              <Group gap={8}>
+                <Title order={4}>{s.label}</Title>
+                <Badge variant="light" color={key === "past" && list.length ? "orange" : "gray"}>{list.length}</Badge>
+              </Group>
+              {list.length === 0 && <Text size="sm" c="dimmed">{s.empty}</Text>}
+              {list.map((o) => occCard(o, key))}
+            </Stack>
+          );
+        })}
+      </SimpleGrid>
     </Stack>
   );
 }

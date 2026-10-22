@@ -39,3 +39,11 @@
   .fc .fc-toolbar-title { font-size: 1.05rem; }
   .fc .fc-button { padding: 0.3em 0.55em; }
 }
+
+/* «2 недели»: высокие ячейки, текст задачи переносится целиком. */
+.fc-dayGridTwoWeeks-view .fc-daygrid-day-frame { min-height: 210px; }
+.fc .fc-daygrid-block-event .fc-event-main { white-space: normal; line-height: 1.25; padding: 2px 4px; }
+.fc .fc-daygrid-block-event .fc-event-time { font-weight: 700; margin-right: 4px; }
+.fc .fc-daygrid-block-event .fc-event-title { font-weight: 500; }
+.fc .fc-daygrid-day-number { font-weight: 700; font-size: 0.95rem; padding: 6px 8px; }
+.fc .fc-day-today .fc-daygrid-day-number { color: var(--mantine-color-indigo-filled); }

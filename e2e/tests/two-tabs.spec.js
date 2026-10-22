@@ -64,7 +64,7 @@ test("«Ближайшее»: наступило время — заметка �
   await createNote(context, { title, start_at: inSeconds(5) });
   await page.goto("/upcoming");
   await expect(page.getByTestId("column-Сегодня").getByText(title)).toBeVisible();
-  await expect(page.getByTestId("column-Прошедшие активные").getByText(title)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId("column-Прошедшие").getByText(title)).toBeVisible({ timeout: 10_000 });
   await expect(page.getByTestId("column-Сегодня").getByText(title)).toHaveCount(0);
 });
 

@@ -13,7 +13,7 @@ Color = Literal["red", "orange", "yellow", "green", "teal", "blue", "violet", "g
 Section = Literal["focus", "today", "tomorrow", "week", "past"]
 # Что означает цвет — по умолчанию; пользователь переименовывает в настройках.
 COLOR_LABELS = {
-    "red": "Горит", "orange": "Важно", "yellow": "Ждёт ответа", "green": "Личное",
+    "red": "Горит", "orange": "Деньги", "yellow": "Ждёт ответа", "green": "Личное",
     "teal": "Здоровье", "blue": "Работа", "violet": "Учёба", "gray": "Прочее",
 }
 TIMEZONES = available_timezones()
