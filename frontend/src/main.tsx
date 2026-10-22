@@ -1,22 +1,71 @@
 import "@mantine/core/styles.css";
+import "@mantine/dates/styles.css";
+import "@mantine/notifications/styles.css";
+import "./app.css";
 
-import { MantineProvider, Title, Text, Stack } from "@mantine/core";
-import { StrictMode } from "react";
+import { Center, Loader, MantineProvider } from "@mantine/core";
+import { DatesProvider } from "@mantine/dates";
+import { Notifications } from "@mantine/notifications";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import "dayjs/locale/ru";
+import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router";
+import { api, ApiError, type User } from "./api";
+import { Layout } from "./components/Layout";
+import { NoteEditor } from "./components/NoteEditor";
+import { AppContext, type EditorTarget } from "./context";
+import { CalendarPage } from "./pages/CalendarPage";
+import { Login } from "./pages/Login";
+import { NotesPage } from "./pages/NotesPage";
+import { SettingsPage } from "./pages/SettingsPage";
+import { TagsPage } from "./pages/TagsPage";
+import { TrashPage } from "./pages/TrashPage";
+import { UpcomingPage } from "./pages/UpcomingPage";
+
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: (n, e) => !(e instanceof ApiError && e.status < 500) && n < 2, refetchOnWindowFocus: false } },
+});
 
 function App() {
+  const me = useQuery({ queryKey: ["me"], queryFn: () => api<User>("/me") });
+  const [editor, setEditor] = useState<EditorTarget | null>(null);
+  if (me.isPending)
+    return (
+      <Center mih="100vh">
+        <Loader />
+      </Center>
+    );
+  if (!me.data) return <Login />;
   return (
-    <Stack p="xl">
-      <Title order={2}>Notetaker</Title>
-      <Text c="dimmed">Каркас фронтенда. Экраны появятся по плану в docs/PLAN.md.</Text>
-    </Stack>
+    <AppContext.Provider value={{ user: me.data, openEditor: setEditor }}>
+      <Layout>
+        <Routes>
+          <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/notes" element={<NotesPage />} />
+          <Route path="/upcoming" element={<UpcomingPage />} />
+          <Route path="/trash" element={<TrashPage />} />
+          <Route path="/tags" element={<TagsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="*" element={<Navigate to="/calendar" replace />} />
+        </Routes>
+      </Layout>
+      {editor && <NoteEditor key={JSON.stringify(editor)} target={editor} onClose={() => setEditor(null)} />}
+    </AppContext.Provider>
   );
 }
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <MantineProvider defaultColorScheme="auto">
-      <App />
+      <DatesProvider settings={{ locale: "ru", firstDayOfWeek: 1 }}>
+        <Notifications position="top-right" />
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </QueryClientProvider>
+      </DatesProvider>
     </MantineProvider>
   </StrictMode>,
 );

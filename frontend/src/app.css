@@ -1,0 +1,4 @@
+/* Неактивные заметки в календаре — бледные. */
+.nt-inactive { opacity: 0.45; }
+.fc { --fc-today-bg-color: rgba(92, 176, 238, 0.12); }
+.fc .fc-event { cursor: pointer; }

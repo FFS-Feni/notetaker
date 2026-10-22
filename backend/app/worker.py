@@ -80,12 +80,11 @@ async def dispatch_due(now: datetime) -> int:
             when = _when(start, user.timezone)
             lead = OFFSET_TEXT[job.offset_min] + (" (с опозданием: сервер был недоступен)" if late else "")
             job.status, job.sent_at, job.late = "sent", now, late
-            db.add(
-                Notification(
-                    user_id=user.id, note_id=note.id, job_id=job.id, kind="reminder", title=title,
-                    body=f"{lead} · {when}", occurrence_start=job.occurrence_start, fired_at=now,
-                )
+            notification = Notification(
+                user_id=user.id, note_id=note.id, job_id=job.id, kind="reminder", title=title,
+                body=f"{lead} · {when}", occurrence_start=job.occurrence_start, fired_at=now,
             )
+            db.add(notification)
             db.add(
                 EmailOutbox(
                     idempotency_key=f"reminder:{job.id}",
@@ -95,17 +94,19 @@ async def dispatch_due(now: datetime) -> int:
                     body=f"{title}\n{lead}: {when} ({user.timezone})\n\n{note.body}\n\nОткрыть Notetaker: {settings.app_url}",
                 )
             )
-            await emit(db, user.id, "notification")
+            await db.flush()
+            # Текст — прямо в событии: каждая открытая вкладка покажет его сразу, не дожидаясь запроса.
+            await emit(db, user.id, "notification", id=notification.id, kind="reminder", title=title, body=notification.body)
             sent += 1
         for user_id, count in missed.items():
-            db.add(
-                Notification(
-                    user_id=user_id, kind="missed", title="Пропущенные напоминания",
-                    body=f"Пока сервер не работал, прошло напоминаний: {count}. Их события уже прошли, письма не отправлялись.",
-                    fired_at=now,
-                )
+            summary = Notification(
+                user_id=user_id, kind="missed", title="Пропущенные напоминания",
+                body=f"Пока сервер не работал, прошло напоминаний: {count}. Их события уже прошли, письма не отправлялись.",
+                fired_at=now,
             )
-            await emit(db, user_id, "notification")
+            db.add(summary)
+            await db.flush()
+            await emit(db, user_id, "notification", id=summary.id, kind="missed", title=summary.title, body=summary.body)
     return sent
 
 

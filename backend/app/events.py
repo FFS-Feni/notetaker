@@ -12,6 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 CHANNEL = "nt_events"
 
 
-async def emit(db: AsyncSession, user_id: int, kind: str, **data) -> None:
-    payload = json.dumps({"user_id": user_id, "type": kind, **data}, default=str)
+async def emit(db: AsyncSession, user_id: int, event: str, **data) -> None:
+    payload = json.dumps({"user_id": user_id, "type": event, **data}, default=str)
     await db.execute(text("SELECT pg_notify(:ch, :p)"), {"ch": CHANNEL, "p": payload})
