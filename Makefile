@@ -9,7 +9,7 @@ down:
 migrate:   ## применить миграции к рабочей базе
 	cd backend && uv run alembic upgrade head
 
-test:      ## автотесты backend (база notetaker_test)
+test:      ## автотесты backend (база notetaker_test, нужен make up)
 	cd backend && uv run pytest -q
 
 psql:      ## консоль рабочей базы

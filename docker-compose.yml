@@ -18,6 +18,39 @@ services:
       timeout: 3s
       retries: 30
 
+  backend:
+    build: { context: ./backend, network: host }
+    environment: &backend-env
+      DATABASE_URL: postgresql+asyncpg://notetaker:notetaker@db:5432/notetaker
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+    depends_on:
+      db: { condition: service_healthy }
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  worker:
+    build: { context: ./backend, network: host }
+    command: ["python", "-m", "app.worker"]
+    environment: *backend-env
+    depends_on:
+      backend: { condition: service_healthy }  # миграции уже применены
+    restart: unless-stopped
+
+  frontend:
+    build: { context: ./frontend, network: host }
+    environment:
+      API_URL: http://backend:8000
+    depends_on:
+      backend: { condition: service_healthy }
+    ports:
+      - "127.0.0.1:5173:5173"
+
   mailpit:
     image: axllent/mailpit:v1.27
     ports:

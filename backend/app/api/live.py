@@ -38,7 +38,7 @@ async def mark_shown(notification_id: int, user: User = Depends(current_user), d
     return n
 
 
-@router.websocket("/api/ws")
+@router.websocket("/ws")
 async def websocket(ws: WebSocket):
     async with Session() as db:
         user = await user_by_token(db, ws.cookies.get(COOKIE))
