@@ -31,7 +31,7 @@ async def ensure_demo() -> None:
         def at(days: int, hh: int, mm: int = 0) -> datetime:
             return datetime.combine(today + timedelta(days=days), time(hh, mm), zone).astimezone(UTC)
 
-        user = User(email=DEMO_EMAIL, password_hash=hash_password(DEMO_PASSWORD), timezone=tz, created_at=now)
+        user = User(email=DEMO_EMAIL, password_hash=hash_password(DEMO_PASSWORD), timezone=tz, prefs={}, created_at=now)
         db.add(user)
         try:
             await db.flush()

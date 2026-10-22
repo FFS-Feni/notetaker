@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from pydantic import ValidationError
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +11,7 @@ from app.config import settings
 from app.deps import COOKIE, current_user, get_db
 from app.events import emit
 from app.models import User, UserSession
-from app.schemas import Credentials, SettingsIn, UserOut
+from app.schemas import Credentials, Prefs, SettingsIn, UserOut
 from app.security import hash_password, new_token, token_hash, verify_password
 
 router = APIRouter(prefix="/api", tags=["вход и настройки"])
@@ -31,6 +32,7 @@ async def register(data: Credentials, response: Response, db: AsyncSession = Dep
         email=data.email.strip(),
         password_hash=hash_password(data.password),
         timezone=data.timezone or settings.default_timezone,
+        prefs={},
         created_at=clock.now(),
     )
     db.add(user)
@@ -76,6 +78,11 @@ async def update_settings(data: SettingsIn, user: User = Depends(current_user), 
         user.email = data.email.strip()
     if data.timezone is not None:
         user.timezone = data.timezone
+    if data.prefs is not None:
+        try:  # сливаем с текущими и проверяем целиком — в базу не попадёт неверное значение
+            user.prefs = Prefs.model_validate({**(user.prefs or {}), **data.prefs}).model_dump()
+        except ValidationError as e:
+            raise HTTPException(422, "; ".join(err["msg"].removeprefix("Value error, ") for err in e.errors()))
     await emit(db, user.id, "settings")
     try:
         await db.commit()

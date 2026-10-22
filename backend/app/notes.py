@@ -10,10 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Note, Tag, User
 from app.planner import load_overrides
 from app.recurrence import MARGIN, Occurrence, expand
-from app.schemas import NoteOut, OccurrenceOut, TagOut
+from app.schemas import NoteOut, OccurrenceOut, Prefs, TagOut
 
 TRASH_DAYS = 30
-FOCUS_LIMIT = 3  # «три главных дела на день» — больше уже не фокус
 
 
 async def get_note(db: AsyncSession, user: User, note_id: uuid.UUID, *, lock: bool = False) -> Note:
@@ -103,5 +102,6 @@ async def check_focus_limit(db: AsyncSession, user: User, day, note_id: uuid.UUI
     if note_id is not None:  # сама заметка не в счёт (повторная отметка того же дня)
         stmt = stmt.where(Note.id != note_id)
     taken = await db.scalar(stmt)
-    if taken >= FOCUS_LIMIT:
-        raise HTTPException(409, f"В фокусе дня уже {FOCUS_LIMIT} заметки — уберите одну, чтобы добавить новую")
+    limit = Prefs.model_validate(user.prefs or {}).focus_limit  # по умолчанию 3, настраивается 1–6
+    if taken >= limit:
+        raise HTTPException(409, f"В фокусе дня уже {taken} из {limit} — уберите одну заметку, чтобы добавить новую")

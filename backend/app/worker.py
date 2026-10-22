@@ -20,6 +20,7 @@ from app.db import Session
 from app.events import emit
 from app.models import EmailOutbox, Note, Notification, OccurrenceOverride, ReminderJob, User, UserSession
 from app.planner import replan
+from app.schemas import Prefs
 
 log = logging.getLogger("worker")
 
@@ -89,15 +90,16 @@ async def dispatch_due(now: datetime) -> int:
                 body=f"{lead} · {when}", occurrence_start=job.occurrence_start, fired_at=now,
             )
             db.add(notification)
-            db.add(
-                EmailOutbox(
-                    idempotency_key=f"reminder:{job.id}",
-                    user_id=user.id,
-                    to_addr=user.email,
-                    subject=f"Напоминание: {title} — {when}",
-                    body=f"{title}\n{lead}: {when} ({user.timezone})\n\n{note.body}\n\nОткрыть Notetaker: {settings.app_url}",
+            if Prefs.model_validate(user.prefs or {}).email_reminders:  # письма можно выключить в настройках
+                db.add(
+                    EmailOutbox(
+                        idempotency_key=f"reminder:{job.id}",
+                        user_id=user.id,
+                        to_addr=user.email,
+                        subject=f"Напоминание: {title} — {when}",
+                        body=f"{title}\n{lead}: {when} ({user.timezone})\n\n{note.body}\n\nОткрыть Notetaker: {settings.app_url}",
+                    )
                 )
-            )
             await db.flush()
             # Текст — прямо в событии: каждая открытая вкладка покажет его сразу, не дожидаясь запроса.
             await emit(db, user.id, "notification", id=notification.id, kind="reminder", title=title, body=notification.body)

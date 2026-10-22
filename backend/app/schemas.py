@@ -31,15 +31,42 @@ class Credentials(BaseModel):
     _tz = field_validator("timezone")(check_tz)
 
 
+class Prefs(BaseModel):
+    """Гибкие настройки. Чего нет в базе — берётся отсюда по умолчанию."""
+
+    # Функции: включить / выключить
+    priorities: bool = True  # «Важно / Срочно» и экран «Матрица»
+    focus: bool = True  # «Фокус дня»
+    email_reminders: bool = True  # письма-напоминания (worker не ставит их в очередь)
+    popup_reminders: bool = True  # всплывающие уведомления во вкладках
+    # Тонкая настройка
+    focus_limit: int = Field(3, ge=1, le=6)  # сколько главных дел на день (у метода Айви Ли — 6)
+    default_reminders: list[Offset] = [10]  # напоминания для новой заметки
+    calendar_view: Literal["dayGridMonth", "timeGridWeek", "timeGridDay"] = "dayGridMonth"
+    week_start: Literal[0, 1] = 1  # 0 — воскресенье, 1 — понедельник
+    day_start: int = Field(0, ge=0, le=23)  # часы в виде «неделя / день»
+    day_end: int = Field(24, ge=1, le=24)
+    start_page: Literal["calendar", "notes", "upcoming", "matrix"] = "calendar"
+    theme: Literal["auto", "light", "dark"] = "auto"
+
+    @model_validator(mode="after")
+    def hours_order(self):
+        if self.day_start >= self.day_end:
+            raise ValueError("Начало дня должно быть раньше конца")
+        return self
+
+
 class UserOut(ORM):
     id: int
     email: str
     timezone: str
+    prefs: Prefs
 
 
 class SettingsIn(BaseModel):
     email: str | None = Field(None, pattern=EMAIL, max_length=320)
     timezone: str | None = None
+    prefs: dict | None = None  # частичное обновление: только изменённые ключи
 
     _tz = field_validator("timezone")(check_tz)
 

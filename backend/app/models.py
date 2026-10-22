@@ -25,7 +25,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -54,6 +54,8 @@ class User(Base):
     email: Mapped[str] = mapped_column(Text)  # и логин, и адрес для писем
     password_hash: Mapped[str] = mapped_column(Text)
     timezone: Mapped[str] = mapped_column(Text, server_default="Asia/Bishkek")
+    # Гибкие настройки (функции вкл/выкл, вид календаря и т. п.). Схема и значения по умолчанию — schemas.Prefs.
+    prefs: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     created_at: Mapped[datetime] = _now()
 
 
