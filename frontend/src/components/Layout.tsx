@@ -1,26 +1,35 @@
-import { ActionIcon, AppShell, Badge, Burger, Button, Group, Indicator, NavLink as MNavLink, Popover, ScrollArea, Stack, Text, Title } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
+import {
+  ActionIcon,
+  AppShell,
+  Badge,
+  Burger,
+  Button,
+  Group,
+  Indicator,
+  Kbd,
+  NavLink as MNavLink,
+  Popover,
+  ScrollArea,
+  Stack,
+  Text,
+  ThemeIcon,
+  Tooltip,
+} from "@mantine/core";
+import { useDisclosure, useHotkeys } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router";
-import { api, type AppNotification } from "../api";
+import { api, type AppNotification, type TrashItem, type Upcoming } from "../api";
 import { useApp } from "../context";
 import { useRealtime } from "../realtime";
 import { fmt } from "../time";
+import { Icon, type IconName } from "./icons";
 
-const LINKS = [
-  ["/calendar", "Календарь"],
-  ["/notes", "Список"],
-  ["/upcoming", "Ближайшее"],
-  ["/matrix", "Матрица"],
-  ["/trash", "Корзина"],
-  ["/tags", "Теги"],
-  ["/settings", "Настройки"],
-] as const;
+type Link = { to: string; label: string; icon: IconName; count?: number; alert?: boolean };
 
 export function Layout({ children }: { children: ReactNode }) {
-  const { user } = useApp();
+  const { user, openEditor } = useApp();
   const qc = useQueryClient();
   const [opened, { toggle, close }] = useDisclosure();
   const { pathname } = useLocation();
@@ -31,13 +40,15 @@ export function Layout({ children }: { children: ReactNode }) {
     if (shownHere.current.has(n.id)) return;
     shownHere.current.add(n.id);
     // Всплывающие можно выключить в настройках; «показано» отмечаем всё равно — чтобы не всплыли пачкой потом.
-    if (user.prefs.popup_reminders) notifications.show({
-      id: `n${n.id}`,
-      title: n.title,
-      message: n.body,
-      color: n.kind === "missed" ? "orange" : "pink",
-      autoClose: 20_000,
-    });
+    if (user.prefs.popup_reminders)
+      notifications.show({
+        id: `n${n.id}`,
+        title: n.title,
+        message: n.body,
+        color: n.kind === "missed" ? "orange" : "indigo",
+        icon: <Icon name="bell" size={16} />,
+        autoClose: 20_000,
+      });
     api(`/notifications/${n.id}/shown`, { method: "POST" }).catch(() => {});
   };
   const online = useRealtime(show);
@@ -48,35 +59,75 @@ export function Layout({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // N — новая заметка с любого экрана (в полях ввода не срабатывает).
+  useHotkeys([["n", () => openEditor({ kind: "new" })]]);
+
   const recent = useQuery({ queryKey: ["notifications"], queryFn: () => api<AppNotification[]>("/notifications") });
+  // Счётчики в меню — те же данные, что на экранах (общий кэш, обновляются по событиям).
+  const upcoming = useQuery({ queryKey: ["upcoming"], queryFn: () => api<Upcoming>("/upcoming"), refetchInterval: 60_000 });
+  const trash = useQuery({ queryKey: ["trash"], queryFn: () => api<TrashItem[]>("/trash") });
   const logout = async () => {
     await api("/auth/logout", { method: "POST" });
     qc.clear();
     location.href = "/";
   };
 
+  const groups: [string, Link[]][] = [
+    [
+      "Планирование",
+      [
+        { to: "/upcoming", label: "Ближайшее", icon: "sun", count: upcoming.data?.today.length, alert: !!upcoming.data?.past.length },
+        { to: "/calendar", label: "Календарь", icon: "calendar" },
+        ...(user.prefs.priorities ? [{ to: "/matrix", label: "Матрица", icon: "matrix" as const }] : []),
+      ],
+    ],
+    [
+      "Заметки",
+      [
+        { to: "/notes", label: "Список", icon: "list" },
+        { to: "/tags", label: "Теги", icon: "tag" },
+        { to: "/trash", label: "Корзина", icon: "trash", count: trash.data?.length },
+      ],
+    ],
+    ["", [{ to: "/settings", label: "Настройки", icon: "settings" }]],
+  ];
+
   return (
-    <AppShell header={{ height: 56 }} navbar={{ width: 200, breakpoint: "sm", collapsed: { mobile: !opened } }} padding="md">
+    <AppShell header={{ height: 60 }} navbar={{ width: 230, breakpoint: "sm", collapsed: { mobile: !opened } }} padding="lg">
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between" wrap="nowrap">
           <Group gap="sm" wrap="nowrap">
-            <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
-            <Title order={4}>Notetaker</Title>
-            <Badge color={online ? "teal" : "red"} variant="light" title="Живые обновления между вкладками">
-              {online ? "онлайн" : "нет связи"}
-            </Badge>
+            <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Меню" />
+            <ThemeIcon size={32} radius="md" variant="gradient" gradient={{ from: "indigo", to: "cyan", deg: 135 }}>
+              <Icon name="check" size={18} stroke={2.4} />
+            </ThemeIcon>
+            <Text fw={800} size="lg" visibleFrom="xs">Notetaker</Text>
+            <Tooltip label={online ? "Изменения из других вкладок приходят сразу" : "Нет связи — переподключаюсь…"}>
+              <Badge color={online ? "teal" : "red"} variant="dot" visibleFrom="sm">{online ? "онлайн" : "нет связи"}</Badge>
+            </Tooltip>
           </Group>
-          <Group gap="sm" wrap="nowrap">
+          <Group gap="xs" wrap="nowrap">
+            <Tooltip label={<>Новая заметка <Kbd size="xs">N</Kbd></>}>
+              <Button leftSection={<Icon name="plus" size={16} />} onClick={() => openEditor({ kind: "new" })} visibleFrom="sm">
+                Новая заметка
+              </Button>
+            </Tooltip>
+            <ActionIcon size="lg" hiddenFrom="sm" onClick={() => openEditor({ kind: "new" })} aria-label="Новая заметка">
+              <Icon name="plus" />
+            </ActionIcon>
             <Popover width={320} position="bottom-end" shadow="md">
               <Popover.Target>
-                <Indicator disabled={!recent.data?.some((n) => !n.shown_at)} size={8}>
-                  <ActionIcon variant="default" aria-label="Уведомления">🔔</ActionIcon>
+                <Indicator disabled={!recent.data?.some((n) => !n.shown_at)} size={8} offset={4}>
+                  <ActionIcon variant="default" size="lg" aria-label="Уведомления">
+                    <Icon name="bell" />
+                  </ActionIcon>
                 </Indicator>
               </Popover.Target>
               <Popover.Dropdown>
+                <Text fw={700} size="sm" mb="xs">Уведомления</Text>
                 <ScrollArea.Autosize mah={360}>
                   <Stack gap="xs">
-                    {(recent.data ?? []).length === 0 && <Text size="sm" c="dimmed">Уведомлений пока нет. Они появятся, когда сработает напоминание.</Text>}
+                    {(recent.data ?? []).length === 0 && <Text size="sm" c="dimmed">Пока пусто. Здесь появятся сработавшие напоминания.</Text>}
                     {(recent.data ?? []).slice(0, 15).map((n) => (
                       <div key={n.id}>
                         <Text size="sm" fw={600}>{n.title}</Text>
@@ -87,19 +138,42 @@ export function Layout({ children }: { children: ReactNode }) {
                 </ScrollArea.Autosize>
               </Popover.Dropdown>
             </Popover>
-            <Text size="sm" c="dimmed" visibleFrom="sm">{user.email}</Text>
-            <Button size="xs" variant="default" onClick={logout} visibleFrom="sm">Выйти</Button>
+            <Tooltip label={user.email}>
+              <ActionIcon variant="default" size="lg" onClick={logout} aria-label="Выйти" visibleFrom="sm">
+                <Icon name="logout" />
+              </ActionIcon>
+            </Tooltip>
           </Group>
         </Group>
       </AppShell.Header>
-      <AppShell.Navbar p="xs">
-        {LINKS.filter(([to]) => to !== "/matrix" || user.prefs.priorities).map(([to, label]) => (
-          <MNavLink key={to} component={NavLink} to={to} label={label} active={pathname.startsWith(to)} onClick={close} />
-        ))}
+      <AppShell.Navbar p="sm">
+        <Stack gap="md">
+          {groups.map(([title, links]) => (
+            <div key={title || "rest"}>
+              {title && <Text size="xs" fw={700} c="dimmed" tt="uppercase" px="sm" mb={4} style={{ letterSpacing: "0.05em" }}>{title}</Text>}
+              {links.map((l) => (
+                <MNavLink
+                  key={l.to}
+                  component={NavLink}
+                  to={l.to}
+                  label={l.label}
+                  leftSection={<Icon name={l.icon} />}
+                  rightSection={l.count ? <Badge size="sm" variant={l.alert ? "filled" : "light"} color={l.alert ? "orange" : "gray"} circle={l.count < 10}>{l.count}</Badge> : null}
+                  active={pathname.startsWith(l.to)}
+                  onClick={close}
+                  style={{ borderRadius: "var(--mantine-radius-md)" }}
+                />
+              ))}
+            </div>
+          ))}
+        </Stack>
         <Stack gap={4} mt="auto" hiddenFrom="sm">
           <Text size="xs" c="dimmed" px="sm">{user.email}</Text>
-          <MNavLink label="Выйти" onClick={logout} />
+          <MNavLink label="Выйти" leftSection={<Icon name="logout" />} onClick={logout} />
         </Stack>
+        <Text size="xs" c="dimmed" px="sm" mt="auto" visibleFrom="sm">
+          <Kbd size="xs">N</Kbd> — новая заметка
+        </Text>
       </AppShell.Navbar>
       <AppShell.Main>{children}</AppShell.Main>
     </AppShell>

@@ -1,4 +1,5 @@
 import { ActionIcon, Badge, Button, Group, Paper, SimpleGrid, Stack, Text, Title, Tooltip } from "@mantine/core";
+import { PageHeader } from "../components/PageHeader";
 import { notifications } from "@mantine/notifications";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DateTime } from "luxon";
@@ -80,8 +81,8 @@ export function UpcomingPage() {
             {o.tags.map((t) => <Badge key={t.id} size="xs" variant="light" color={t.color}>{t.name}</Badge>)}
           </Group>
           {isPast && (
-            <Button size="xs" variant="light" mt={6} onClick={(e) => { e.stopPropagation(); deactivate(o); }}>
-              Сделать неактивной
+            <Button size="xs" variant="light" color="teal" mt={6} leftSection="✓" onClick={(e) => { e.stopPropagation(); deactivate(o); }}>
+              Готово
             </Button>
           )}
         </Paper>
@@ -89,8 +90,23 @@ export function UpcomingPage() {
     </Stack>
   );
 
+  const stat = (label: string, value: string | number, color: string, hint: string) => (
+    <Paper withBorder p="sm" radius="md">
+      <Text size="xs" c="dimmed" tt="uppercase" fw={700}>{label}</Text>
+      <Text fw={800} fz={28} c={color} lh={1.2}>{value}</Text>
+      <Text size="xs" c="dimmed">{hint}</Text>
+    </Paper>
+  );
+
   return (
     <Stack gap="lg">
+    <PageHeader title="Ближайшее" hint={`Что впереди и что требует внимания · ${DateTime.fromMillis(now).setZone(user.timezone).setLocale("ru").toFormat("cccc, d MMMM")}`} />
+    <SimpleGrid cols={{ base: 2, sm: focusOn ? 4 : 3 }} spacing="sm" mt={-8}>
+      {stat("Сегодня", today.length, "indigo", "до конца дня")}
+      {stat("На неделе", week.length, "cyan", "следующие 7 дней")}
+      {stat("Прошло", past.length, past.length ? "orange" : "teal", past.length ? "активные — отметьте или перенесите" : "всё отмечено")}
+      {focusOn && stat("Фокус дня", `${focus.length}/${limit}`, "yellow.7", "главные дела на сегодня")}
+    </SimpleGrid>
     {focusOn && <Paper withBorder radius="md" p="sm" data-testid="focus" style={{ borderLeft: "4px solid var(--mantine-color-yellow-5)" }}>
       <Group justify="space-between" mb={6}>
         <Title order={5}>★ Фокус дня <Text span c="dimmed" size="sm">{focus.length} из {limit}</Text></Title>

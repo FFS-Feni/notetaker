@@ -1,3 +1,9 @@
+/* Фон приложения чуть темнее карточек — карточки читаются как отдельные объекты. */
+[data-mantine-color-scheme="light"] .mantine-AppShell-main { background: var(--mantine-color-gray-0); }
+[data-mantine-color-scheme="dark"] .mantine-AppShell-main { background: var(--mantine-color-dark-8); }
+[data-mantine-color-scheme="light"] .mantine-AppShell-navbar,
+[data-mantine-color-scheme="light"] .mantine-AppShell-header { background: var(--mantine-color-white); }
+
 /* FullCalendar в цветах Mantine — одинаково читается в светлой и тёмной теме. */
 .fc {
   --fc-border-color: var(--mantine-color-default-border);

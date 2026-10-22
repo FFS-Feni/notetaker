@@ -3,6 +3,7 @@ import { notifications } from "@mantine/notifications";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { api, type Prefs } from "../api";
+import { PageHeader } from "../components/PageHeader";
 import { useApp } from "../context";
 import { REMINDER_LABEL } from "../time";
 
@@ -44,7 +45,7 @@ export function SettingsPage() {
 
   return (
     <Stack gap="md" maw={980}>
-      <Title order={4}>Настройки</Title>
+      <PageHeader title="Настройки" hint="Всё сохраняется сразу и применяется во всех открытых вкладках и на других устройствах" />
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
         <Section title="Профиль">
           <form onSubmit={(e) => { e.preventDefault(); send({ email, timezone }, "Профиль сохранён"); }}>

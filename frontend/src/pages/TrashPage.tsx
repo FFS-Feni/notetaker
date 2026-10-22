@@ -1,8 +1,9 @@
-import { Button, Group, Paper, Stack, Text, Title } from "@mantine/core";
+import { Button, Group, Paper, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DateTime } from "luxon";
 import { useState } from "react";
+import { PageHeader } from "../components/PageHeader";
 import { api, type TrashItem } from "../api";
 import { useApp } from "../context";
 import { fmt } from "../time";
@@ -25,9 +26,8 @@ export function TrashPage() {
 
   return (
     <Stack gap="sm" maw={800}>
-      <Title order={4}>Корзина</Title>
-      <Text size="sm" c="dimmed">Заметки удаляются насовсем через 30 дней. При восстановлении вернутся напоминания, чей срок ещё не наступил.</Text>
-      {trash.data?.length === 0 && <Text c="dimmed">Корзина пуста.</Text>}
+      <PageHeader title="Корзина" hint="Заметки удаляются насовсем через 30 дней. При восстановлении вернутся напоминания, чей срок ещё не наступил" />
+      {trash.data?.length === 0 && <Paper withBorder p="xl" ta="center"><Text c="dimmed">Корзина пуста — удалённые заметки появятся здесь.</Text></Paper>}
       {trash.data?.map((n) => {
         const days = Math.max(0, Math.ceil(DateTime.fromISO(n.purge_at).diffNow("days").days));
         return (

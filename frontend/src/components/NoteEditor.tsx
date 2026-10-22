@@ -36,6 +36,17 @@ type Form = {
 };
 type Scope = "this" | "following" | "all";
 
+// Быстрые даты: один клик вместо выбора в календаре.
+function quickDates(tz: string): [string, string][] {
+  const now = DateTime.now().setZone(tz);
+  const w = (d: DateTime) => d.toFormat("yyyy-MM-dd HH:mm:ss");
+  const out: [string, string][] = [["Через час", w(now.plus({ hours: 1 }).set({ second: 0, millisecond: 0 }).set({ minute: Math.ceil(now.minute / 5) * 5 % 60 }))]];
+  if (now.hour < 18) out.push(["Сегодня в 18:00", w(now.set({ hour: 18, minute: 0, second: 0, millisecond: 0 }))]);
+  out.push(["Завтра в 9:00", w(now.plus({ days: 1 }).set({ hour: 9, minute: 0, second: 0, millisecond: 0 }))]);
+  out.push(["Через неделю", w(now.plus({ weeks: 1 }).set({ second: 0, millisecond: 0 }))]);
+  return out;
+}
+
 function formFrom(note: Note | undefined, target: EditorTarget, tz: string, defaultReminders: number[]): Form {
   if (!note) {
     const start =
@@ -238,6 +249,11 @@ export function NoteEditor({ target, onClose }: { target: EditorTarget; onClose:
             locale="ru"
           />
           <Switch label="Активна" checked={form.is_active} onChange={(e) => set("is_active", e.currentTarget.checked)} mb={8} />
+        </Group>
+        <Group gap={6} mt={-6}>
+          {quickDates(tz).map(([label, wall]) => (
+            <Button key={label} size="compact-xs" variant={form.start === wall ? "filled" : "light"} onClick={() => set("start", wall)}>{label}</Button>
+          ))}
         </Group>
         {seriesFields ? (
           <>

@@ -1,7 +1,8 @@
-import { ActionIcon, Button, ColorInput, Group, Paper, Stack, Text, TextInput, Title } from "@mantine/core";
+import { ActionIcon, Button, ColorInput, Group, Paper, Stack, TextInput } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { PageHeader } from "../components/PageHeader";
 import { api, type Tag } from "../api";
 
 const SWATCHES = ["#f0a93e", "#5cb0ee", "#e7799e", "#47c2a2", "#ad9ff7", "#ef6b6b", "#9aa3b2"];
@@ -47,8 +48,7 @@ export function TagsPage() {
   };
   return (
     <Stack gap="sm" maw={600}>
-      <Title order={4}>Теги</Title>
-      <Text size="sm" c="dimmed">Имя меняется на месте (Enter). Удаление тега снимает его с заметок, сами заметки остаются.</Text>
+      <PageHeader title="Теги" hint="Имя меняется на месте (Enter). Удаление тега снимает его с заметок, сами заметки остаются" />
       {tags.data?.map((t) => <TagRow key={`${t.id}-${t.name}`} tag={t} />)}
       <form onSubmit={create}>
         <Group wrap="nowrap" align="flex-end">

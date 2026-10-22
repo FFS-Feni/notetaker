@@ -3,6 +3,7 @@ import { notifications } from "@mantine/notifications";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, type Matrix, type Note } from "../api";
+import { PageHeader } from "../components/PageHeader";
 import { useApp } from "../context";
 import { QUADRANTS, setFocus, todayIn } from "../priority";
 import { fmt } from "../time";
@@ -33,8 +34,8 @@ export function MatrixPage() {
   return (
     <Stack gap="sm">
       <div>
-        <Title order={4}>Матрица Эйзенхауэра</Title>
-        <Text size="sm" c="dimmed">
+        <PageHeader title="Матрица Эйзенхауэра" />
+        <Text size="sm" c="dimmed" mt={-12} mb="xs">
           Перетащите заметку в нужный квадрант или выберите его в меню ⋯. {user.prefs.focus ? `★ — добавить в «Фокус дня» (до ${user.prefs.focus_limit} главных дел). ` : ""}Сделанные (неактивные) заметки здесь не показываются.
         </Text>
       </div>

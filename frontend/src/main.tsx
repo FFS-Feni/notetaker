@@ -3,7 +3,7 @@ import "@mantine/dates/styles.css";
 import "@mantine/notifications/styles.css";
 import "./app.css";
 
-import { Center, Loader, MantineProvider, useMantineColorScheme } from "@mantine/core";
+import { Center, createTheme, Loader, MantineProvider, useMantineColorScheme } from "@mantine/core";
 import { DatesProvider } from "@mantine/dates";
 import { Notifications } from "@mantine/notifications";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
@@ -25,6 +25,14 @@ const MatrixPage = lazy(() => import("./pages/MatrixPage").then((m) => ({ defaul
 const TrashPage = lazy(() => import("./pages/TrashPage").then((m) => ({ default: m.TrashPage })));
 const TagsPage = lazy(() => import("./pages/TagsPage").then((m) => ({ default: m.TagsPage })));
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
+
+// Тема: спокойный индиго, скруглённые углы, плотная типографика заголовков.
+const theme = createTheme({
+  primaryColor: "indigo",
+  defaultRadius: "md",
+  headings: { fontWeight: "750" },
+  cursorType: "pointer",
+});
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: (n, e) => !(e instanceof ApiError && e.status < 500) && n < 2, refetchOnWindowFocus: false } },
@@ -71,7 +79,7 @@ function App() {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <MantineProvider defaultColorScheme="auto">
+    <MantineProvider theme={theme} defaultColorScheme="auto">
       <Notifications position="top-right" />
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>

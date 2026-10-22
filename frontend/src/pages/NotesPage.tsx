@@ -1,4 +1,4 @@
-import { Badge, Group, MultiSelect, Paper, SegmentedControl, Select, Stack, Switch, Text, TextInput, Button } from "@mantine/core";
+import { Badge, Group, MultiSelect, Paper, SegmentedControl, Select, Stack, Switch, Text, TextInput } from "@mantine/core";
 import { DatePickerInput } from "@mantine/dates";
 import { useDebouncedValue } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
@@ -7,6 +7,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { DateTime } from "luxon";
 import { useEffect, useRef, useState } from "react";
 import { api, type Note, type NotePage, type Tag } from "../api";
+import { PageHeader } from "../components/PageHeader";
 import { useApp } from "../context";
 import { QUADRANTS } from "../priority";
 import { FREQ_LABEL, fmt } from "../time";
@@ -73,7 +74,8 @@ export function NotesPage() {
 
   return (
     <Stack gap="sm">
-      <Group gap="sm" align="flex-end" wrap="wrap">
+      <PageHeader title="Заметки" hint="Поиск и фильтры работают по всем заметкам на сервере, а не по видимой части" />
+      <Group gap="sm" align="flex-end" wrap="wrap" mt={-8}>
         <TextInput label="Поиск по заголовку и тексту" placeholder="например, банк" value={q} onChange={(e) => setQ(e.currentTarget.value)} w={{ base: "100%", sm: 240 }} />
         <MultiSelect label="Теги" placeholder="любые" data={(tags.data ?? []).map((t) => ({ value: String(t.id), label: t.name }))} value={tagIds} onChange={setTagIds} w={{ base: "100%", sm: 220 }} clearable />
         <div>
@@ -84,7 +86,6 @@ export function NotesPage() {
           data={QUADRANTS.map((q) => ({ value: q.key, label: `${q.title} (${q.hint.split(" —")[0].toLowerCase()})` }))} w={{ base: "100%", sm: 260 }} />}
         <DatePickerInput type="range" label="Период" placeholder="за всё время" value={period} onChange={(v) => setPeriod(v as [string | null, string | null])} clearable valueFormat="DD.MM.YYYY" w={{ base: "100%", sm: 230 }} />
         <Select label="Сортировка" value={sort} onChange={(v) => v && setSort(v as keyof typeof SORTS)} data={Object.entries(SORTS).map(([value, s]) => ({ value, label: s[2] }))} w={{ base: "100%", sm: 190 }} allowDeselect={false} />
-        <Button onClick={() => openEditor({ kind: "new" })}>Новая заметка</Button>
       </Group>
       <Text size="sm" c="dimmed">Найдено: {total}{notes.isFetching ? " · загрузка…" : ""}</Text>
       <div ref={scrollRef} style={{ height: "calc(100vh - 250px)", minHeight: 300, overflow: "auto" }}>
