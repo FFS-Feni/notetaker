@@ -40,8 +40,8 @@ export function NotesPage() {
     to: period[1] ? day(period[1], 1) : undefined,
     sort: SORTS[sort][0],
     order: SORTS[sort][1],
-    important: quad?.important,
-    urgent: quad?.urgent,
+    important: user.prefs.priorities ? quad?.important : undefined,
+    urgent: user.prefs.priorities ? quad?.urgent : undefined,
   };
   // Поиск и фильтры — на сервере по всем заметкам; страницы по 50 через курсор.
   const notes = useInfiniteQuery({
@@ -80,8 +80,8 @@ export function NotesPage() {
           <Text size="sm" fw={500} mb={2}>Статус</Text>
           <SegmentedControl value={status} onChange={setStatus} data={[{ value: "all", label: "Все" }, { value: "active", label: "Активные" }, { value: "inactive", label: "Неактивные" }]} />
         </div>
-        <Select label="Приоритет" placeholder="любой" clearable value={quadrant} onChange={setQuadrant}
-          data={QUADRANTS.map((q) => ({ value: q.key, label: `${q.title} (${q.hint.split(" —")[0].toLowerCase()})` }))} w={{ base: "100%", sm: 260 }} />
+        {user.prefs.priorities && <Select label="Приоритет" placeholder="любой" clearable value={quadrant} onChange={setQuadrant}
+          data={QUADRANTS.map((q) => ({ value: q.key, label: `${q.title} (${q.hint.split(" —")[0].toLowerCase()})` }))} w={{ base: "100%", sm: 260 }} />}
         <DatePickerInput type="range" label="Период" placeholder="за всё время" value={period} onChange={(v) => setPeriod(v as [string | null, string | null])} clearable valueFormat="DD.MM.YYYY" w={{ base: "100%", sm: 230 }} />
         <Select label="Сортировка" value={sort} onChange={(v) => v && setSort(v as keyof typeof SORTS)} data={Object.entries(SORTS).map(([value, s]) => ({ value, label: s[2] }))} w={{ base: "100%", sm: 190 }} allowDeselect={false} />
         <Button onClick={() => openEditor({ kind: "new" })}>Новая заметка</Button>
@@ -99,8 +99,8 @@ export function NotesPage() {
                       <Text fw={600} truncate>{n.title}</Text>
                       <Group gap={6} wrap="nowrap">
                         <Text size="xs" c="dimmed">{fmt(n.start_at, user.timezone)}{n.freq !== "none" ? ` · ↻ ${FREQ_LABEL[n.freq].toLowerCase()}` : ""}</Text>
-                        {n.important && <Badge size="xs" color="red" variant="filled">Важно</Badge>}
-                        {n.urgent && <Badge size="xs" color="orange" variant="filled">Срочно</Badge>}
+                        {user.prefs.priorities && n.important && <Badge size="xs" color="red" variant="filled">Важно</Badge>}
+                        {user.prefs.priorities && n.urgent && <Badge size="xs" color="orange" variant="filled">Срочно</Badge>}
                         {n.tags.map((t) => (
                           <Badge key={t.id} size="xs" variant="light" color={t.color}>{t.name}</Badge>
                         ))}

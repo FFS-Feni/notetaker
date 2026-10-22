@@ -37,7 +37,21 @@ export async function api<T>(
   return data as T;
 }
 
-export type User = { id: number; email: string; timezone: string };
+export type Prefs = {
+  priorities: boolean;
+  focus: boolean;
+  email_reminders: boolean;
+  popup_reminders: boolean;
+  focus_limit: number;
+  default_reminders: number[];
+  calendar_view: "dayGridMonth" | "timeGridWeek" | "timeGridDay";
+  week_start: 0 | 1;
+  day_start: number;
+  day_end: number;
+  start_page: "calendar" | "notes" | "upcoming" | "matrix";
+  theme: "auto" | "light" | "dark";
+};
+export type User = { id: number; email: string; timezone: string; prefs: Prefs };
 export type Tag = { id: number; name: string; color: string };
 export type Freq = "none" | "daily" | "weekly" | "monthly";
 export type Note = {

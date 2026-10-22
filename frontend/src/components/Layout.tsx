@@ -30,7 +30,8 @@ export function Layout({ children }: { children: ReactNode }) {
   const show = (n: AppNotification) => {
     if (shownHere.current.has(n.id)) return;
     shownHere.current.add(n.id);
-    notifications.show({
+    // Всплывающие можно выключить в настройках; «показано» отмечаем всё равно — чтобы не всплыли пачкой потом.
+    if (user.prefs.popup_reminders) notifications.show({
       id: `n${n.id}`,
       title: n.title,
       message: n.body,
@@ -92,7 +93,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </Group>
       </AppShell.Header>
       <AppShell.Navbar p="xs">
-        {LINKS.map(([to, label]) => (
+        {LINKS.filter(([to]) => to !== "/matrix" || user.prefs.priorities).map(([to, label]) => (
           <MNavLink key={to} component={NavLink} to={to} label={label} active={pathname.startsWith(to)} onClick={close} />
         ))}
         <Stack gap={4} mt="auto" hiddenFrom="sm">

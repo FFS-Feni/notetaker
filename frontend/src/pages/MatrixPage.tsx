@@ -35,7 +35,7 @@ export function MatrixPage() {
       <div>
         <Title order={4}>Матрица Эйзенхауэра</Title>
         <Text size="sm" c="dimmed">
-          Перетащите заметку в нужный квадрант или выберите его в меню ⋯. ★ — добавить в «Фокус дня» (до трёх главных дел). Сделанные (неактивные) заметки здесь не показываются.
+          Перетащите заметку в нужный квадрант или выберите его в меню ⋯. {user.prefs.focus ? `★ — добавить в «Фокус дня» (до ${user.prefs.focus_limit} главных дел). ` : ""}Сделанные (неактивные) заметки здесь не показываются.
         </Text>
       </div>
       <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
@@ -91,11 +91,11 @@ export function MatrixPage() {
                         </Group>
                       </div>
                       <Group gap={2} wrap="nowrap" onClick={(e) => e.stopPropagation()}>
-                        <Tooltip label={n.focus_on === today ? "Убрать из фокуса дня" : "В фокус дня"}>
+                        {user.prefs.focus && <Tooltip label={n.focus_on === today ? "Убрать из фокуса дня" : "В фокус дня"}>
                           <ActionIcon variant="subtle" color="yellow" aria-label="Фокус дня" onClick={() => focus(n)}>
                             {n.focus_on === today ? "★" : "☆"}
                           </ActionIcon>
-                        </Tooltip>
+                        </Tooltip>}
                         <Menu position="bottom-end" withinPortal>
                           <Menu.Target>
                             <ActionIcon variant="subtle" color="gray" aria-label="Переместить">⋯</ActionIcon>

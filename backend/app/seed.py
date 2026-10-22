@@ -43,20 +43,21 @@ async def ensure_demo() -> None:
         )
         db.add_all([work, home, health, study])
         soon = (now + timedelta(minutes=75)).replace(second=0, microsecond=0)
-        specs = [
-            ("Планёрка", "Короткий созвон команды.", at(-3, 9), "daily", [10], [work], True, None),
-            ("Встреча с подрядчиком", "Обсудить сроки и смету.", soon, "none", [10, 60], [work], True, None),
-            ("Тренировка", "", at(1, 19), "weekly", [60], [health], True, None),
-            ("Оплатить интернет", "Личный кабинет провайдера.", at(3, 10), "monthly", [1440], [home], True, None),
-            ("Сдать отчёт", "Квартальный отчёт.", at(4, 12), "none", [1440, 60], [work, study], True, None),
-            ("Купить лекарство", "", at(-1, 18), "none", [], [health], True, None),
-            ("Позвонить в банк", "Уточнить про банковскую карту.", at(2, 11), "none", [10], [home], False, None),
-            ("Старый список покупок", "Молоко, хлеб.", at(-5, 12), "none", [], [home], True, now - timedelta(days=3)),
+        specs = [  # заголовок, текст, начало, повтор, напоминания, теги, активна, удалена, важно, срочно, в фокусе
+            ("Планёрка", "Короткий созвон команды.", at(-3, 9), "daily", [10], [work], True, None, False, False, False),
+            ("Встреча с подрядчиком", "Обсудить сроки и смету.", soon, "none", [10, 60], [work], True, None, True, True, True),
+            ("Тренировка", "", at(1, 19), "weekly", [60], [health], True, None, True, False, False),
+            ("Оплатить интернет", "Личный кабинет провайдера.", at(3, 10), "monthly", [1440], [home], True, None, False, True, False),
+            ("Сдать отчёт", "Квартальный отчёт.", at(4, 12), "none", [1440, 60], [work, study], True, None, True, False, True),
+            ("Купить лекарство", "", at(-1, 18), "none", [], [health], True, None, False, True, False),
+            ("Позвонить в банк", "Уточнить про банковскую карту.", at(2, 11), "none", [10], [home], False, None, False, False, False),
+            ("Старый список покупок", "Молоко, хлеб.", at(-5, 12), "none", [], [home], True, now - timedelta(days=3), False, False, False),
         ]
-        for title, body, start, freq, reminders, tags, active, deleted in specs:
+        for title, body, start, freq, reminders, tags, active, deleted, important, urgent, focus in specs:
             note = Note(
                 user_id=user.id, title=title, body=body, start_at=start, tz=tz, is_active=active, freq=freq,
                 reminders=reminders, version=1, created_at=now, updated_at=now, deleted_at=deleted, tags=tags,
+                important=important, urgent=urgent, focus_on=today if focus else None,
             )
             db.add(note)
             await db.flush()

@@ -51,7 +51,10 @@ export function CalendarPage() {
         locale={ruLocale}
         timeZone={user.timezone}
         // На телефоне месяц нечитаем — открываем день, переключатель видов уходит вниз.
-        initialView={mobile ? "timeGridDay" : "dayGridMonth"}
+        initialView={mobile ? "timeGridDay" : user.prefs.calendar_view}
+        firstDay={user.prefs.week_start}
+        slotMinTime={`${String(user.prefs.day_start).padStart(2, "0")}:00:00`}
+        slotMaxTime={`${String(user.prefs.day_end).padStart(2, "0")}:00:00`}
         headerToolbar={mobile
           ? { left: "prev,next", center: "title", right: "today" }
           : { left: "prev,next today", center: "title", right: "dayGridMonth,timeGridWeek,timeGridDay" }}
@@ -69,7 +72,7 @@ export function CalendarPage() {
         datesSet={(a) => setRange({ from: a.startStr, to: a.endStr })}
         events={(occ.data ?? []).map((o) => ({
           id: o.id,
-          title: (o.important ? "❗ " : "") + o.title + (o.freq !== "none" ? " ↻" : ""),
+          title: (user.prefs.priorities && o.important ? "❗ " : "") + o.title + (o.freq !== "none" ? " ↻" : ""),
           start: o.start,
           allDay: false,
           backgroundColor: o.is_active ? (o.tags[0]?.color ?? "#5cb0ee") : "transparent",

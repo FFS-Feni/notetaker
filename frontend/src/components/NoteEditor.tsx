@@ -36,13 +36,13 @@ type Form = {
 };
 type Scope = "this" | "following" | "all";
 
-function formFrom(note: Note | undefined, target: EditorTarget, tz: string): Form {
+function formFrom(note: Note | undefined, target: EditorTarget, tz: string, defaultReminders: number[]): Form {
   if (!note) {
     const start =
       target.kind === "new" && target.start
         ? target.start
         : DateTime.now().setZone(tz).plus({ hours: 1 }).startOf("hour").toFormat("yyyy-MM-dd HH:mm:ss");
-    return { title: "", body: "", start, is_active: true, freq: "none", until: null, reminders: ["10"], tag_ids: [], important: false, urgent: false };
+    return { title: "", body: "", start, is_active: true, freq: "none", until: null, reminders: defaultReminders.map(String), tag_ids: [], important: false, urgent: false };
   }
   const occ = target.kind === "occ" ? target.occ : null;
   return {
@@ -62,6 +62,7 @@ function formFrom(note: Note | undefined, target: EditorTarget, tz: string): For
 export function NoteEditor({ target, onClose }: { target: EditorTarget; onClose: () => void }) {
   const { user } = useApp();
   const tz = user.timezone;
+  const prefs = user.prefs;
   const qc = useQueryClient();
   const noteId = target.kind === "note" ? target.id : target.kind === "occ" ? target.occ.note_id : null;
   const note = useQuery({ queryKey: ["note", noteId], queryFn: () => api<Note>(`/notes/${noteId}`), enabled: !!noteId });
@@ -81,7 +82,7 @@ export function NoteEditor({ target, onClose }: { target: EditorTarget; onClose:
   useEffect(() => {
     if (noteId && !note.data) return;
     if (form === null) {
-      const f = formFrom(note.data, target, tz);
+      const f = formFrom(note.data, target, tz, prefs.default_reminders);
       setForm(f);
       setSaved(f);
       setBaseVersion(note.data?.version ?? null);
@@ -89,7 +90,7 @@ export function NoteEditor({ target, onClose }: { target: EditorTarget; onClose:
     }
     if (note.data && baseVersion !== null && note.data.version > baseVersion) {
       if (!dirty) {
-        const f = formFrom(note.data, target, tz);
+        const f = formFrom(note.data, target, tz, prefs.default_reminders);
         setForm(f);
         setSaved(f);
         setBaseVersion(note.data.version);
@@ -104,7 +105,7 @@ export function NoteEditor({ target, onClose }: { target: EditorTarget; onClose:
 
   const takeTheirs = () => {
     if (!theirs) return;
-    const f = formFrom(theirs, target, tz);
+    const f = formFrom(theirs, target, tz, prefs.default_reminders);
     setForm(f);
     setSaved(f);
     setBaseVersion(theirs.version);
@@ -260,13 +261,13 @@ export function NoteEditor({ target, onClose }: { target: EditorTarget; onClose:
                 />
               )}
             </Group>
-            <div>
+            {prefs.priorities && <div>
               <Text size="sm" fw={500} mb={4}>Приоритет</Text>
               <Group gap="xs">
                 <Chip size="sm" color="red" checked={form.important} onChange={(v) => set("important", v)}>Важно</Chip>
                 <Chip size="sm" color="orange" checked={form.urgent} onChange={(v) => set("urgent", v)}>Срочно</Chip>
               </Group>
-            </div>
+            </div>}
             <div>
               <Text size="sm" fw={500} mb={4}>Напомнить</Text>
               <Chip.Group multiple value={form.reminders} onChange={(v) => set("reminders", v)}>
