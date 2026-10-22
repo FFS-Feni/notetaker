@@ -31,8 +31,11 @@ async def load_overrides(db: AsyncSession, note_ids: list[uuid.UUID]) -> dict[uu
 
 
 async def replan(db: AsyncSession, note: Note, now: datetime) -> None:
-    await db.execute(delete(ReminderJob).where(ReminderJob.note_id == note.id, ReminderJob.status == "pending"))
-    if note.deleted_at is not None or not note.is_active or not note.reminders:
+    off = note.deleted_at is not None or not note.is_active
+    stmt = delete(ReminderJob).where(ReminderJob.note_id == note.id, ReminderJob.status == "pending")
+    # «Напомнить позже» переживает правку заметки, но не деактивацию и не корзину.
+    await db.execute(stmt if off else stmt.where(ReminderJob.snooze.is_(False)))
+    if off or not note.reminders:
         return
     max_offset = timedelta(minutes=max(note.reminders))
     if note.freq == "none":

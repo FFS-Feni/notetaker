@@ -124,6 +124,18 @@ class TagWithCount(TagOut):
 
 
 # --- заметки ---
+class ChecklistItem(BaseModel):
+    text: str = Field(min_length=1, max_length=300)
+    done: bool = False
+
+    @field_validator("text")
+    @classmethod
+    def strip(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Пустой пункт чек-листа")
+        return v.strip()
+
+
 class NoteFields(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=500)
     body: str | None = Field(None, max_length=20000)
@@ -138,6 +150,7 @@ class NoteFields(BaseModel):
     focus_on: date | None = None  # день, когда заметка — одно из трёх главных дел
     color: Color | None = None
     triaged: bool | None = None  # разобрана — лежит в одном из блоков доски «Задачи»
+    checklist: list[ChecklistItem] | None = Field(None, max_length=50)
 
     @field_validator("title")
     @classmethod
@@ -191,6 +204,7 @@ class NoteOut(ORM):
     focus_on: date | None
     color: str | None
     triaged: bool
+    checklist: list[ChecklistItem]
     version: int
     created_at: datetime
     updated_at: datetime
@@ -220,6 +234,7 @@ class OccurrenceOut(BaseModel):
     important: bool
     urgent: bool
     color: str | None
+    checklist: list[ChecklistItem]
     version: int
 
 
@@ -274,3 +289,24 @@ class NoteEventOut(BaseModel):
     changes: dict
     device: str
     user_name: str
+
+
+class QuickIn(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
+
+
+class QuickParsed(BaseModel):
+    title: str
+    start_at: datetime  # если время не указано — ближайший целый час
+    freq: str
+    reminders: list[int]
+    important: bool
+    urgent: bool
+    color: str | None
+    tag_ids: list[int]  # уже существующие теги
+    new_tags: list[str]  # таких тегов ещё нет — будут созданы
+    hints: list[str]
+
+
+class SnoozeIn(BaseModel):
+    minutes: int = Field(ge=1, le=7 * 24 * 60)  # «через 10 минут», «через час», «завтра»…

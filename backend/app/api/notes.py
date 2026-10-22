@@ -1,6 +1,6 @@
 import base64
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -11,13 +11,14 @@ from app import clock
 from app.deps import current_user, get_db
 from app.events import emit
 from app.history import record, snapshot
-from app.models import Note, NoteEvent, User, note_tags
+from app.models import Note, NoteEvent, Tag, User, note_tags
+from app.quickadd import parse as parse_quick
 from app.notes import check_focus_limit, check_version, get_note, purge_at, resolve_tags, touch
 from app.planner import replan
-from app.schemas import Matrix, NoteEventOut, NoteIn, NoteOut, NotePage, NotePatch, Quadrant, TrashItem
+from app.schemas import Matrix, NoteEventOut, NoteIn, NoteOut, NotePage, NotePatch, Prefs, Quadrant, QuickIn, QuickParsed, TrashItem
 
 router = APIRouter(prefix="/api", tags=["заметки"])
-NOT_NULL = {"title", "body", "start_at", "is_active", "freq", "reminders", "important", "urgent", "triaged"}
+NOT_NULL = {"title", "body", "start_at", "is_active", "freq", "reminders", "important", "urgent", "triaged", "checklist"}
 
 
 def _ids(raw: str | None, what: str) -> list[int]:
@@ -129,6 +130,7 @@ async def create_note(data: NoteIn, request: Request, user: User = Depends(curre
         focus_on=data.focus_on,
         color=data.color,
         triaged=data.triaged or data.important or data.urgent,
+        checklist=[i.model_dump() for i in data.checklist or []],
         version=1,
         created_at=now,
         updated_at=now,
@@ -142,6 +144,43 @@ async def create_note(data: NoteIn, request: Request, user: User = Depends(curre
     await emit(db, user.id, "notes", id=str(note.id))
     await db.commit()
     return note
+
+
+async def _quick(db: AsyncSession, user: User, text: str) -> QuickParsed:
+    now = clock.now()
+    p = parse_quick(text, now, user.timezone)
+    tags = {t.name.lower(): t for t in await db.scalars(select(Tag).where(Tag.user_id == user.id))}
+    start = p.start_at or (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+    return QuickParsed(
+        title=p.title, start_at=start, freq=p.freq,
+        reminders=p.reminders if p.reminders is not None else Prefs.model_validate(user.prefs or {}).default_reminders,
+        important=p.important, urgent=p.urgent, color=p.color,
+        tag_ids=[tags[n.lower()].id for n in p.tags if n.lower() in tags],
+        new_tags=list(dict.fromkeys(n for n in p.tags if n.lower() not in tags)),
+        hints=p.hints,
+    )
+
+
+@router.post("/notes/parse", response_model=QuickParsed)
+async def parse_note(data: QuickIn, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    """Что поняли из строки — для подсказки, пока человек печатает. Ничего не создаёт."""
+    return await _quick(db, user, data.text)
+
+
+@router.post("/notes/quick", response_model=NoteOut, status_code=201)
+async def quick_note(data: QuickIn, request: Request, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    """Заметка одной строкой: «завтра в 9 позвонить маме #дом !важно». Новые теги создаются сами."""
+    q = await _quick(db, user, data.text)
+    if not q.title:
+        raise HTTPException(422, "Напишите, что сделать — например, «завтра в 9 позвонить маме»")
+    for name in q.new_tags:
+        tag = Tag(user_id=user.id, name=name, color="#868e96")
+        db.add(tag)
+        await db.flush()
+        q.tag_ids.append(tag.id)
+    note_in = NoteIn(title=q.title, start_at=q.start_at, freq=q.freq, reminders=q.reminders, important=q.important,
+                     urgent=q.urgent, color=q.color, tag_ids=q.tag_ids)
+    return await create_note(note_in, request, user, db)
 
 
 @router.get("/notes/{note_id}/history", response_model=list[NoteEventOut])
@@ -181,7 +220,7 @@ async def update_note(note_id: uuid.UUID, data: NotePatch, request: Request, use
     for key, value in fields.items():
         if value is None and key in NOT_NULL:
             continue
-        setattr(note, key, value)
+        setattr(note, key, value)  # checklist уже словари: model_dump выше
     if data.tag_ids is not None:
         note.tags = await resolve_tags(db, user, data.tag_ids)
     if note.freq == "none":

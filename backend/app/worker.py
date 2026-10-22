@@ -79,7 +79,10 @@ async def dispatch_due(now: datetime) -> int:
             user = await db.get(User, job.user_id)
             title = ov.title if ov and ov.title else note.title
             when = _when(start, user.timezone)
-            if late:  # «через 10 минут» уже неправда — пишем, сколько осталось на самом деле
+            if job.snooze:  # «напомнить позже»: пишем, сколько осталось до начала (или что время уже наступило)
+                left = round((start - now).total_seconds() / 60)
+                lead = f"повторное напоминание · начало через {left} мин" if left > 0 else "повторное напоминание · время уже наступило"
+            elif late:  # «через 10 минут» уже неправда — пишем, сколько осталось на самом деле
                 left = max(1, round((start - now).total_seconds() / 60))
                 lead = f"осталось {left} мин (с опозданием: сервер был недоступен)"
             else:
@@ -102,7 +105,8 @@ async def dispatch_due(now: datetime) -> int:
                 )
             await db.flush()
             # Текст — прямо в событии: каждая открытая вкладка покажет его сразу, не дожидаясь запроса.
-            await emit(db, user.id, "notification", id=notification.id, kind="reminder", title=title, body=notification.body)
+            await emit(db, user.id, "notification", id=notification.id, kind="reminder", title=title, body=notification.body,
+                       note_id=str(note.id))
             sent += 1
         for user_id, count in missed.items():
             summary = Notification(

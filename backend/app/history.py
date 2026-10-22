@@ -9,7 +9,7 @@ from app import clock
 from app.models import Note, NoteEvent, User
 
 TRACKED = ("title", "body", "start_at", "is_active", "freq", "until", "reminders", "important", "urgent",
-           "focus_on", "color", "triaged", "tags")
+           "focus_on", "color", "triaged", "tags", "checklist")
 _BROWSERS = (("Edg/", "Edge"), ("OPR/", "Opera"), ("YaBrowser", "Яндекс Браузер"), ("Firefox/", "Firefox"),
              ("Chrome/", "Chrome"), ("Safari/", "Safari"))
 _SYSTEMS = (("Windows", "Windows"), ("Android", "Android"), ("iPhone", "iPhone"), ("iPad", "iPad"),

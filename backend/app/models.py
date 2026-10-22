@@ -136,6 +136,8 @@ class Note(Base):
     color: Mapped[str | None] = mapped_column(Text)
     # Задача разобрана — положена в один из четырёх блоков доски; иначе она в «Неразобранных».
     triaged: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    # Чек-лист: [{"text": "Молоко", "done": false}, …] — пункты внутри заметки, прогресс видно на карточках.
+    checklist: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
     # Серия, от которой отделили «начиная с этого дня».
     split_from: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("notes.id", ondelete="SET NULL"))
 
@@ -179,6 +181,8 @@ class ReminderJob(Base):
     fire_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(Text, server_default="pending")
     late: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))  # отправлено после простоя сервера
+    # «Напомнить позже» из уведомления: такое задание не пересоздаётся при правке заметки.
+    snooze: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     created_at: Mapped[datetime] = _now()
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

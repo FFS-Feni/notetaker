@@ -87,6 +87,7 @@ def occurrence_out(o: Occurrence) -> OccurrenceOut:
         tags=[TagOut.model_validate(t) for t in o.note.tags],
         important=o.note.important,
         color=o.note.color,
+        checklist=o.note.checklist,
         urgent=o.note.urgent,
         version=o.note.version,
     )

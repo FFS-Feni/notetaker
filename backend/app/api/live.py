@@ -2,7 +2,7 @@
 
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,9 +10,13 @@ from app import clock
 from app.db import Session
 from app.deps import COOKIE, current_user, get_db, user_by_token
 from app.events import emit
-from app.models import Notification, User
+from app.api.calendar import _override
+from app.history import record, snapshot
+from app.models import Note, Notification, ReminderJob, User
+from app.notes import touch
+from app.planner import replan
 from app.realtime import hub
-from app.schemas import NotificationOut
+from app.schemas import NotificationOut, SnoozeIn
 
 router = APIRouter(prefix="/api", tags=["уведомления"])
 
@@ -35,6 +39,56 @@ async def mark_shown(notification_id: int, user: User = Depends(current_user), d
         n.shown_at = clock.now()
         await emit(db, user.id, "notification_shown", id=n.id)
         await db.commit()
+    return n
+
+
+async def _reminder(db: AsyncSession, user: User, notification_id: int) -> tuple[Notification, ReminderJob, Note]:
+    n = await db.scalar(select(Notification).where(Notification.id == notification_id, Notification.user_id == user.id))
+    job = await db.get(ReminderJob, n.job_id) if n and n.job_id else None
+    note = await db.scalar(select(Note).where(Note.id == job.note_id).with_for_update(of=Note)) if job else None
+    if n is None or job is None or note is None or note.deleted_at is not None:
+        raise HTTPException(404, "Напоминание уже неактуально")
+    return n, job, note
+
+
+async def _handled(db: AsyncSession, user: User, n: Notification) -> None:
+    n.shown_at = n.shown_at or clock.now()
+    await emit(db, user.id, "notification_handled", id=n.id)  # закрыть уведомление во всех вкладках
+
+
+@router.post("/notifications/{notification_id}/snooze", response_model=NotificationOut)
+async def snooze(notification_id: int, data: SnoozeIn, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    """«Напомнить позже»: ещё одно напоминание о том же вхождении через N минут (переживает правку заметки)."""
+    n, job, note = await _reminder(db, user, notification_id)
+    if not note.is_active:
+        raise HTTPException(409, "Заметка уже отмечена сделанной")
+    db.add(ReminderJob(user_id=user.id, note_id=note.id, occurrence_start=job.occurrence_start, offset_min=job.offset_min,
+                       fire_at=clock.now() + timedelta(minutes=data.minutes), snooze=True))
+    await _handled(db, user, n)
+    await db.commit()
+    return n
+
+
+@router.post("/notifications/{notification_id}/done", response_model=NotificationOut)
+async def mark_done(notification_id: int, request: Request, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    """«Готово» прямо из уведомления: обычная заметка становится неактивной, у повтора — только это вхождение."""
+    n, job, note = await _reminder(db, user, notification_id)
+    now = clock.now()
+    before = snapshot(note)
+    if note.freq == "none":
+        note.is_active = False
+    else:
+        (await _override(db, note, job.occurrence_start, now)).is_active = False
+    touch(note, now)
+    await db.flush()
+    await replan(db, note, now)
+    if note.freq == "none":
+        await record(db, note, user, request, "updated", before)
+    else:
+        await record(db, note, user, request, "occurrence", changes={"occurrence": [job.occurrence_start.isoformat(), "сделано"]})
+    await emit(db, user.id, "notes", id=str(note.id), version=note.version)
+    await _handled(db, user, n)
+    await db.commit()
     return n
 
 
