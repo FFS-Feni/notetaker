@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { createNote, inSeconds, newUser, unique } from "./helpers.js";
 
-test("задачи: перетаскивание из «Неразобранных» в «Сделать сейчас» ставит «важно» и «срочно»; вторая вкладка видит сразу", async ({ context }) => {
+test("задачи: перетаскивание из «Неразобранных» в «Важные и срочные» ставит «важно» и «срочно»; вторая вкладка видит сразу", async ({ context }) => {
   await newUser(context);
   const title = unique("Отчёт для директора");
   const note = await createNote(context, { title, start_at: inSeconds(7200) });

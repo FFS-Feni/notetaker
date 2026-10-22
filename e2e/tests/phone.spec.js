@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { inSeconds, newUser, unique } from "./helpers.js";
 
-test("телефон: создать заметку, увидеть в календаре, переложить в матрице через меню, настройки", async ({ context, page }) => {
+test("телефон: создать заметку, увидеть в календаре, переложить на доске задач через меню, настройки", async ({ context, page }) => {
   await newUser(context);
   const title = unique("Позвонить маме");
   await page.goto("/notes");
