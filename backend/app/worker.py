@@ -78,7 +78,11 @@ async def dispatch_due(now: datetime) -> int:
             user = await db.get(User, job.user_id)
             title = ov.title if ov and ov.title else note.title
             when = _when(start, user.timezone)
-            lead = OFFSET_TEXT[job.offset_min] + (" (с опозданием: сервер был недоступен)" if late else "")
+            if late:  # «через 10 минут» уже неправда — пишем, сколько осталось на самом деле
+                left = max(1, round((start - now).total_seconds() / 60))
+                lead = f"осталось {left} мин (с опозданием: сервер был недоступен)"
+            else:
+                lead = OFFSET_TEXT[job.offset_min]
             job.status, job.sent_at, job.late = "sent", now, late
             notification = Notification(
                 user_id=user.id, note_id=note.id, job_id=job.id, kind="reminder", title=title,

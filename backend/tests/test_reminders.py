@@ -161,6 +161,8 @@ async def test_downtime_policy(client, sql, clock, mailpit):
     statuses = dict(await sql.fetch("SELECT n.title, j.status FROM reminder_jobs j JOIN notes n ON n.id = j.note_id"))
     assert statuses == {"Впереди": "sent", "Прошло": "skipped"}
     assert await sql.fetchval("SELECT late FROM reminder_jobs WHERE status = 'sent'") is True
+    body = await sql.fetchval("SELECT body FROM notifications WHERE kind = 'reminder'")
+    assert body.startswith("осталось 30 мин (с опозданием")  # встреча в T0+120, сейчас T0+90
     kinds = [r["kind"] for r in await sql.fetch("SELECT kind FROM notifications ORDER BY id")]
     assert kinds == ["reminder", "missed"]
     assert len(await outbox(sql)) == 1

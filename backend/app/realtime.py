@@ -38,19 +38,34 @@ class Hub:
 
     async def _listen_forever(self) -> None:
         dsn = settings.database_url.replace("+asyncpg", "")
+        first = True
         while True:
+            conn = None
             try:
                 conn = await asyncpg.connect(dsn)
-                closed = asyncio.Event()
-                conn.add_termination_listener(lambda _c: closed.set())
                 await conn.add_listener(CHANNEL, self._on_event)
                 log.info("LISTEN %s", CHANNEL)
-                await closed.wait()
+                if not first:
+                    # Пока связи с базой не было, события могли потеряться — пусть вкладки перезапросят всё.
+                    self._broadcast(json.dumps({"type": "resync"}))
+                first = False
+                # Простаивающее соединение может умереть молча (перезапуск базы) — проверяем его сами.
+                while True:
+                    await asyncio.sleep(5)
+                    await asyncio.wait_for(conn.fetchval("SELECT 1"), timeout=3)
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                log.exception("LISTEN оборвался, переподключаюсь")
+            except Exception as e:
+                log.warning("LISTEN оборвался (%s), переподключаюсь", e)
+            finally:
+                if conn is not None:
+                    conn.terminate()
             await asyncio.sleep(1)
+
+    def _broadcast(self, payload: str) -> None:
+        for user_id, sockets in self.sockets.items():
+            for ws in list(sockets):
+                asyncio.create_task(self._send(user_id, ws, payload))
 
     def _on_event(self, _conn, _pid, _channel, payload: str) -> None:
         user_id = json.loads(payload).get("user_id")

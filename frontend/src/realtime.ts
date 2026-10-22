@@ -33,6 +33,10 @@ export function useRealtime(onNotification: (n: AppNotification) => void) {
       };
       ws.onmessage = (e) => {
         const msg = JSON.parse(e.data);
+        if (msg.type === "resync") {
+          qc.invalidateQueries(); // сервер переподключился к базе — перезапросить всё
+          return;
+        }
         const keys = AFFECTS[msg.type] ?? [];
         qc.invalidateQueries({ predicate: (q) => keys.includes(q.queryKey[0] as string) });
         if (msg.type === "notification") notify.current(msg);
