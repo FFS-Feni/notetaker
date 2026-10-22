@@ -42,7 +42,7 @@ export function UpcomingPage() {
   };
 
   const column = (title: string, list: Occurrence[], empty: string, isPast = false) => (
-    <Stack gap="xs">
+    <Stack gap="xs" data-testid={`column-${title}`}>
       <Title order={5}>{title} <Text span c="dimmed" size="sm">{list.length}</Text></Title>
       {list.length === 0 && <Text size="sm" c="dimmed">{empty}</Text>}
       {list.map((o) => (
