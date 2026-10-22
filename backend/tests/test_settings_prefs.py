@@ -11,7 +11,7 @@ MIN = timedelta(minutes=1)
 
 async def test_defaults_and_partial_update(client):
     prefs = (await client.get("/api/me")).json()["prefs"]
-    assert prefs["priorities"] is True and prefs["focus_limit"] == 3 and prefs["calendar_view"] == "dayGridMonth"
+    assert prefs["priorities"] is True and prefs["focus_limit"] == 3 and prefs["calendar_view"] == "dayGridTwoWeeks"
     r = await client.patch("/api/settings", json={"prefs": {"theme": "dark", "focus": False}})
     assert r.status_code == 200
     r = await client.patch("/api/settings", json={"prefs": {"week_start": 0}})

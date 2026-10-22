@@ -56,6 +56,7 @@ class User(Base):
     timezone: Mapped[str] = mapped_column(Text, server_default="Asia/Bishkek")
     # Гибкие настройки (функции вкл/выкл, вид календаря и т. п.). Схема и значения по умолчанию — schemas.Prefs.
     prefs: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    name: Mapped[str] = mapped_column(Text, server_default="")  # как подписывать в истории изменений
     created_at: Mapped[datetime] = _now()
 
 
@@ -99,6 +100,9 @@ class Note(Base):
         CheckConstraint("reminders <@ ARRAY[10, 60, 1440]", name="reminders"),
         CheckConstraint("until IS NULL OR freq <> 'none'", name="until_needs_freq"),
         CheckConstraint("length(btrim(title)) > 0", name="title_not_empty"),
+        CheckConstraint(
+            "color IS NULL OR color IN ('red', 'orange', 'yellow', 'green', 'teal', 'blue', 'violet', 'gray')", name="color"
+        ),
         Index("ix_notes_user_start", "user_id", "start_at", postgresql_where=text("deleted_at IS NULL")),
         Index("ix_notes_user_updated", "user_id", "updated_at", postgresql_where=text("deleted_at IS NULL")),
         Index("ix_notes_user_trash", "user_id", "deleted_at", postgresql_where=text("deleted_at IS NOT NULL")),
@@ -128,6 +132,10 @@ class Note(Base):
     urgent: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     # «Фокус дня»: в какой день (по поясу пользователя) заметка — одно из трёх главных дел.
     focus_on: Mapped[date | None] = mapped_column(Date)
+    # Цвет из палитры (8 цветов, названия задаёт пользователь); NULL — без цвета.
+    color: Mapped[str | None] = mapped_column(Text)
+    # Задача разобрана — положена в один из четырёх блоков доски; иначе она в «Неразобранных».
+    triaged: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     # Серия, от которой отделили «начиная с этого дня».
     split_from: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("notes.id", ondelete="SET NULL"))
 
@@ -173,6 +181,21 @@ class ReminderJob(Base):
     late: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))  # отправлено после простоя сервера
     created_at: Mapped[datetime] = _now()
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class NoteEvent(Base):
+    """История заметки: кто, когда, откуда (браузер и система) и что изменил (поле: было → стало)."""
+
+    __tablename__ = "note_events"
+    __table_args__ = (Index("ix_note_events_note_at", "note_id", "at"),)
+
+    id: Mapped[int] = _id()
+    note_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("notes.id", ondelete="CASCADE"))
+    user_id: Mapped[int | None] = _user_fk(ondelete="SET NULL", nullable=True)
+    at: Mapped[datetime] = _now()
+    action: Mapped[str] = mapped_column(Text)  # created, updated, trashed, restored, occurrence
+    changes: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    device: Mapped[str] = mapped_column(Text, server_default="")  # «Chrome · Windows»
 
 
 class Notification(Base):

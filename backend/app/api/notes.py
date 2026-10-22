@@ -3,20 +3,42 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import and_, exists, func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import clock
 from app.deps import current_user, get_db
 from app.events import emit
-from app.models import Note, User, note_tags
+from app.history import record, snapshot
+from app.models import Note, NoteEvent, User, note_tags
 from app.notes import check_focus_limit, check_version, get_note, purge_at, resolve_tags, touch
 from app.planner import replan
-from app.schemas import Matrix, NoteIn, NoteOut, NotePage, NotePatch, Quadrant, TrashItem
+from app.schemas import Matrix, NoteEventOut, NoteIn, NoteOut, NotePage, NotePatch, Quadrant, TrashItem
 
 router = APIRouter(prefix="/api", tags=["заметки"])
-NOT_NULL = {"title", "body", "start_at", "is_active", "freq", "reminders", "important", "urgent"}
+NOT_NULL = {"title", "body", "start_at", "is_active", "freq", "reminders", "important", "urgent", "triaged"}
+
+
+def _ids(raw: str | None, what: str) -> list[int]:
+    try:
+        return [int(x) for x in (raw or "").split(",") if x]
+    except ValueError:
+        raise HTTPException(400, f"{what} — числа через запятую")
+
+
+def _search(stmt, q: str | None, tags: str | None, colors: str | None):
+    """Общие фильтры списка и корзины: подстрока в заголовке/тексте, любой из тегов, любой из цветов."""
+    if q and q.strip():
+        pattern = "%" + q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        stmt = stmt.where(or_(Note.title.ilike(pattern, escape="\\"), Note.body.ilike(pattern, escape="\\")))
+    if tag_ids := _ids(tags, "tags"):
+        stmt = stmt.where(exists().where(note_tags.c.note_id == Note.id, note_tags.c.tag_id.in_(tag_ids)))
+    if colors:
+        wanted = [c for c in colors.split(",") if c]
+        cond = Note.color.in_([c for c in wanted if c != "none"])
+        stmt = stmt.where(or_(cond, Note.color.is_(None)) if "none" in wanted else cond)
+    return stmt
 
 
 def _enc(value: datetime, note_id: uuid.UUID) -> str:
@@ -38,6 +60,8 @@ async def list_notes(
     status: Literal["all", "active", "inactive"] = "all",
     important: bool | None = None,
     urgent: bool | None = None,
+    color: str | None = Query(None, description="цвета через запятую; none — без цвета"),
+    triaged: bool | None = None,
     frm: datetime | None = Query(None, alias="from"),
     to: datetime | None = None,
     sort: Literal["start", "updated"] = "start",
@@ -48,16 +72,9 @@ async def list_notes(
     db: AsyncSession = Depends(get_db),
 ):
     """Поиск и фильтры считает база по всем заметкам; страницы — по курсору, без OFFSET."""
-    stmt = select(Note).where(Note.user_id == user.id, Note.deleted_at.is_(None))
-    if q and q.strip():
-        pattern = "%" + q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-        stmt = stmt.where(or_(Note.title.ilike(pattern, escape="\\"), Note.body.ilike(pattern, escape="\\")))
-    if tags:
-        try:
-            tag_ids = [int(x) for x in tags.split(",") if x]
-        except ValueError:
-            raise HTTPException(400, "tags — числа через запятую")
-        stmt = stmt.where(exists().where(note_tags.c.note_id == Note.id, note_tags.c.tag_id.in_(tag_ids)))
+    stmt = _search(select(Note).where(Note.user_id == user.id, Note.deleted_at.is_(None)), q, tags, color)
+    if triaged is not None:
+        stmt = stmt.where(Note.triaged.is_(triaged))
     if status != "all":
         stmt = stmt.where(Note.is_active.is_(status == "active"))
     if important is not None:
@@ -95,7 +112,7 @@ async def list_notes(
 
 
 @router.post("/notes", response_model=NoteOut, status_code=201)
-async def create_note(data: NoteIn, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def create_note(data: NoteIn, request: Request, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     now = clock.now()
     note = Note(
         user_id=user.id,
@@ -110,6 +127,8 @@ async def create_note(data: NoteIn, user: User = Depends(current_user), db: Asyn
         important=data.important,
         urgent=data.urgent,
         focus_on=data.focus_on,
+        color=data.color,
+        triaged=data.triaged or data.important or data.urgent,
         version=1,
         created_at=now,
         updated_at=now,
@@ -119,9 +138,28 @@ async def create_note(data: NoteIn, user: User = Depends(current_user), db: Asyn
     db.add(note)
     await db.flush()
     await replan(db, note, now)
+    await record(db, note, user, request, "created")
     await emit(db, user.id, "notes", id=str(note.id))
     await db.commit()
     return note
+
+
+@router.get("/notes/{note_id}/history", response_model=list[NoteEventOut])
+async def note_history(note_id: uuid.UUID, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    """Кто, когда, откуда и что менял — новые сверху."""
+    await get_note(db, user, note_id)
+    rows = await db.execute(
+        select(NoteEvent, User.name, User.email)
+        .outerjoin(User, User.id == NoteEvent.user_id)
+        .where(NoteEvent.note_id == note_id)
+        .order_by(NoteEvent.at.desc(), NoteEvent.id.desc())
+        .limit(100)
+    )
+    return [
+        NoteEventOut(id=e.id, at=e.at, action=e.action, changes=e.changes, device=e.device,
+                     user_name=name or (email.split("@")[0] if email else "—"))
+        for e, name, email in rows
+    ]
 
 
 @router.get("/notes/{note_id}", response_model=NoteOut)
@@ -130,7 +168,7 @@ async def read_note(note_id: uuid.UUID, user: User = Depends(current_user), db: 
 
 
 @router.patch("/notes/{note_id}", response_model=NoteOut)
-async def update_note(note_id: uuid.UUID, data: NotePatch, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def update_note(note_id: uuid.UUID, data: NotePatch, request: Request, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     note = await get_note(db, user, note_id, lock=True)
     if note.deleted_at is not None:
         raise HTTPException(409, "Заметка в корзине — сначала восстановите её")
@@ -138,6 +176,7 @@ async def update_note(note_id: uuid.UUID, data: NotePatch, user: User = Depends(
     if "focus_on" in data.model_fields_set:
         await check_focus_limit(db, user, data.focus_on, note.id)
     now = clock.now()
+    before = snapshot(note)
     fields = data.model_dump(exclude_unset=True, exclude={"version", "tag_ids"})
     for key, value in fields.items():
         if value is None and key in NOT_NULL:
@@ -147,29 +186,34 @@ async def update_note(note_id: uuid.UUID, data: NotePatch, user: User = Depends(
         note.tags = await resolve_tags(db, user, data.tag_ids)
     if note.freq == "none":
         note.until = None
+    if (data.important or data.urgent) and "triaged" not in data.model_fields_set:
+        note.triaged = True  # отметили «важно/срочно» — задача разобрана
     touch(note, now)
     await replan(db, note, now)
+    await record(db, note, user, request, "updated", before)
     await emit(db, user.id, "notes", id=str(note.id), version=note.version)
     await db.commit()
     return note
 
 
 @router.delete("/notes/{note_id}", status_code=204)
-async def trash_note(note_id: uuid.UUID, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def trash_note(note_id: uuid.UUID, request: Request, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     note = await get_note(db, user, note_id, lock=True)
     if note.deleted_at is None:
         now = clock.now()
         note.deleted_at = now
         touch(note, now)
         await replan(db, note, now)  # в корзине — напоминаний нет
+        await record(db, note, user, request, "trashed")
         await emit(db, user.id, "notes", id=str(note.id))
         await db.commit()
 
 
 @router.get("/matrix", response_model=Matrix)
 async def matrix(limit: int = Query(50, ge=1, le=200), user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    """Активные заметки по квадрантам «важно × срочно». Сначала самые ранние — просроченное наверху."""
-    base = select(Note).where(Note.user_id == user.id, Note.deleted_at.is_(None), Note.is_active)
+    """Разобранные активные задачи по блокам «важно × срочно». Сначала самые ранние — просроченное наверху.
+    Неразобранные (triaged = false) сюда не попадают — они в списке «Неразобранные» на доске."""
+    base = select(Note).where(Note.user_id == user.id, Note.deleted_at.is_(None), Note.is_active, Note.triaged)
     out = {}
     for name, important, urgent in (("do", True, True), ("plan", True, False), ("delegate", False, True), ("drop", False, False)):
         stmt = base.where(Note.important.is_(important), Note.urgent.is_(urgent))
@@ -180,15 +224,27 @@ async def matrix(limit: int = Query(50, ge=1, le=200), user: User = Depends(curr
 
 
 @router.get("/trash", response_model=list[TrashItem])
-async def list_trash(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    notes = await db.scalars(
-        select(Note).where(Note.user_id == user.id, Note.deleted_at.is_not(None)).order_by(Note.deleted_at.desc())
-    )
+async def list_trash(
+    q: str | None = None,
+    tags: str | None = None,
+    color: str | None = None,
+    deleted_from: datetime | None = None,
+    deleted_to: datetime | None = None,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Корзина с теми же фильтрами, что и список, плюс период удаления."""
+    stmt = _search(select(Note).where(Note.user_id == user.id, Note.deleted_at.is_not(None)), q, tags, color)
+    if deleted_from:
+        stmt = stmt.where(Note.deleted_at >= deleted_from)
+    if deleted_to:
+        stmt = stmt.where(Note.deleted_at < deleted_to)
+    notes = await db.scalars(stmt.order_by(Note.deleted_at.desc()).limit(500))
     return [TrashItem(**NoteOut.model_validate(n).model_dump(), purge_at=purge_at(n)) for n in notes]
 
 
 @router.post("/trash/{note_id}/restore", response_model=NoteOut)
-async def restore_note(note_id: uuid.UUID, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def restore_note(note_id: uuid.UUID, request: Request, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     note = await get_note(db, user, note_id, lock=True)
     if note.deleted_at is None:
         raise HTTPException(409, "Заметка не в корзине")
@@ -196,6 +252,7 @@ async def restore_note(note_id: uuid.UUID, user: User = Depends(current_user), d
     note.deleted_at = None
     touch(note, now)
     await replan(db, note, now)  # вернутся только напоминания, чей срок ещё не наступил
+    await record(db, note, user, request, "restored")
     await emit(db, user.id, "notes", id=str(note.id))
     await db.commit()
     return note

@@ -5,8 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import current_user, get_db
 from app.events import emit
-from app.models import Tag, User
-from app.schemas import TagIn, TagOut, TagPatch
+from app.models import Note, Tag, User, note_tags
+from app.schemas import TagIn, TagOut, TagPatch, TagWithCount
 
 router = APIRouter(prefix="/api/tags", tags=["теги"])
 DUPLICATE = "Тег с таким именем уже есть"
@@ -19,9 +19,17 @@ async def _get(db: AsyncSession, user: User, tag_id: int) -> Tag:
     return tag
 
 
-@router.get("", response_model=list[TagOut])
+@router.get("", response_model=list[TagWithCount])
 async def list_tags(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    return (await db.scalars(select(Tag).where(Tag.user_id == user.id).order_by(func.lower(Tag.name)))).all()
+    """Теги со счётчиком заметок (без корзины) — видно, какой тег живой, а какой можно удалить."""
+    count = (
+        select(func.count())
+        .select_from(note_tags.join(Note, Note.id == note_tags.c.note_id))
+        .where(note_tags.c.tag_id == Tag.id, Note.deleted_at.is_(None))
+        .scalar_subquery()
+    )
+    rows = await db.execute(select(Tag, count).where(Tag.user_id == user.id).order_by(func.lower(Tag.name)))
+    return [TagWithCount(id=t.id, name=t.name, color=t.color, count=n) for t, n in rows]
 
 
 @router.post("", response_model=TagOut, status_code=201)

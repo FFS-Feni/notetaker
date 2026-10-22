@@ -33,6 +33,7 @@ async def register(data: Credentials, response: Response, db: AsyncSession = Dep
         password_hash=hash_password(data.password),
         timezone=data.timezone or settings.default_timezone,
         prefs={},
+        name=data.email.split("@")[0],
         created_at=clock.now(),
     )
     db.add(user)
@@ -78,6 +79,8 @@ async def update_settings(data: SettingsIn, user: User = Depends(current_user), 
         user.email = data.email.strip()
     if data.timezone is not None:
         user.timezone = data.timezone
+    if data.name is not None:
+        user.name = data.name.strip()
     if data.prefs is not None:
         try:  # сливаем с текущими и проверяем целиком — в базу не попадёт неверное значение
             user.prefs = Prefs.model_validate({**(user.prefs or {}), **data.prefs}).model_dump()

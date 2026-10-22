@@ -5,13 +5,14 @@ from datetime import UTC, datetime, time, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import clock
 from app.deps import current_user, get_db
 from app.events import emit
+from app.history import record
 from app.models import Note, OccurrenceOverride, User
 from app.notes import check_version, get_note, occurrence_out, occurrences_for, touch
 from app.planner import replan
@@ -68,6 +69,7 @@ async def update_occurrence(
     note_id: uuid.UUID,
     start: datetime,
     data: OccurrencePatch,
+    request: Request,
     scope: Scope = "this",
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
@@ -114,6 +116,11 @@ async def update_occurrence(
     await db.flush()
     for n in affected:
         await replan(db, n, now)
+    iso = lambda v: v.isoformat() if hasattr(v, "isoformat") else v
+    await record(db, note, user, request, "occurrence", changes={
+        "occurrence": [start.isoformat(), {"this": "только это", "following": "это и следующие"}[scope]],
+        **{k: [None, iso(v)] for k, v in fields.items()},
+    })
     await emit(db, user.id, "notes", id=str(note.id), version=note.version)
     await db.commit()
     return note
@@ -124,6 +131,7 @@ async def delete_occurrence(
     note_id: uuid.UUID,
     start: datetime,
     version: int,
+    request: Request,
     scope: Scope = "this",
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
@@ -144,6 +152,9 @@ async def delete_occurrence(
     touch(note, now)
     await db.flush()
     await replan(db, note, now)
+    await record(db, note, user, request, "occurrence", changes={
+        "occurrence": [start.isoformat(), {"this": "удалено это", "following": "удалено это и следующие"}[scope]],
+    })
     await emit(db, user.id, "notes", id=str(note.id), version=note.version)
     await db.commit()
 
@@ -153,8 +164,10 @@ async def upcoming(user: User = Depends(current_user), db: AsyncSession = Depend
     """Сегодня (до полуночи по поясу пользователя), следующие 7 дней и прошедшие активные за 7 дней."""
     now = clock.now()
     zone = ZoneInfo(user.timezone)
-    end_today = datetime.combine(now.astimezone(zone).date() + timedelta(days=1), time(), zone).astimezone(UTC)
-    week_end = max(now + timedelta(days=7), end_today)
+    day = now.astimezone(zone).date()
+    end_today = datetime.combine(day + timedelta(days=1), time(), zone).astimezone(UTC)
+    end_tomorrow = datetime.combine(day + timedelta(days=2), time(), zone).astimezone(UTC)
+    week_end = max(now + timedelta(days=7), end_tomorrow)
     occs = await occurrences_for(db, user, now - timedelta(days=7), week_end)
     focus = await db.scalars(
         select(Note)
@@ -165,6 +178,7 @@ async def upcoming(user: User = Depends(current_user), db: AsyncSession = Depend
         now=now,
         focus=focus.all(),
         today=[occurrence_out(o) for o in occs if now <= o.start < end_today],
-        week=[occurrence_out(o) for o in occs if end_today <= o.start < week_end],
+        tomorrow=[occurrence_out(o) for o in occs if end_today <= o.start < end_tomorrow],
+        week=[occurrence_out(o) for o in occs if end_tomorrow <= o.start < week_end],
         past=[occurrence_out(o) for o in reversed(occs) if o.start < now and o.is_active],
     )

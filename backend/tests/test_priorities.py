@@ -12,12 +12,15 @@ async def test_matrix_quadrants(client):
     await make_note(client, title="Пожар", important=True, urgent=True)
     await make_note(client, title="Стратегия", important=True)
     await make_note(client, title="Звонок", urgent=True)
-    await make_note(client, title="Мелочь")
+    await make_note(client, title="Мелочь", triaged=True)
+    await make_note(client, title="Неразобранная")
     await make_note(client, title="Неактивная важная", important=True, urgent=True, is_active=False)
     m = (await client.get("/api/matrix")).json()
     assert {q: [n["title"] for n in m[q]["items"]] for q in m} == {
         "do": ["Пожар"], "plan": ["Стратегия"], "delegate": ["Звонок"], "drop": ["Мелочь"],
-    }  # неактивные (сделанные) в матрицу не попадают
+    }  # неразобранные и неактивные (сделанные) в блоки не попадают
+    inbox = (await client.get("/api/notes", params={"triaged": "false", "status": "active"})).json()
+    assert [n["title"] for n in inbox["items"]] == ["Неразобранная"]
 
 
 async def test_moving_between_quadrants_and_filters(client):

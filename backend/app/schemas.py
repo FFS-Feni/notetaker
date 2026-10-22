@@ -9,6 +9,13 @@ EMAIL = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 COLOR = r"^#[0-9a-fA-F]{6}$"
 Freq = Literal["none", "daily", "weekly", "monthly"]
 Offset = Literal[10, 60, 1440]
+Color = Literal["red", "orange", "yellow", "green", "teal", "blue", "violet", "gray"]
+Section = Literal["focus", "today", "tomorrow", "week", "past"]
+# Что означает цвет — по умолчанию; пользователь переименовывает в настройках.
+COLOR_LABELS = {
+    "red": "Горит", "orange": "Важно", "yellow": "Ждёт ответа", "green": "Личное",
+    "teal": "Здоровье", "blue": "Работа", "violet": "Учёба", "gray": "Прочее",
+}
 TIMEZONES = available_timezones()
 
 
@@ -35,19 +42,27 @@ class Prefs(BaseModel):
     """Гибкие настройки. Чего нет в базе — берётся отсюда по умолчанию."""
 
     # Функции: включить / выключить
-    priorities: bool = True  # «Важно / Срочно» и экран «Матрица»
+    priorities: bool = True  # «Важно / Срочно» и доска «Задачи»
     focus: bool = True  # «Фокус дня»
     email_reminders: bool = True  # письма-напоминания (worker не ставит их в очередь)
     popup_reminders: bool = True  # всплывающие уведомления во вкладках
     # Тонкая настройка
     focus_limit: int = Field(3, ge=1, le=6)  # сколько главных дел на день (у метода Айви Ли — 6)
     default_reminders: list[Offset] = [10]  # напоминания для новой заметки
-    calendar_view: Literal["dayGridMonth", "timeGridWeek", "timeGridDay"] = "dayGridMonth"
+    calendar_view: Literal["dayGridTwoWeeks", "dayGridMonth", "timeGridWeek", "timeGridDay"] = "dayGridTwoWeeks"
     week_start: Literal[0, 1] = 1  # 0 — воскресенье, 1 — понедельник
     day_start: int = Field(0, ge=0, le=23)  # часы в виде «неделя / день»
     day_end: int = Field(24, ge=1, le=24)
-    start_page: Literal["calendar", "notes", "upcoming", "matrix"] = "calendar"
+    start_page: Literal["calendar", "notes", "upcoming", "tasks", "matrix"] = "upcoming"  # matrix — старое имя «Задач»
+    upcoming_sections: list[Section] = ["focus", "today", "tomorrow", "week", "past"]  # что показывать в «Ближайшем»
+    color_labels: dict[Color, str] = COLOR_LABELS
     theme: Literal["auto", "light", "dark"] = "auto"
+
+    @field_validator("color_labels")
+    @classmethod
+    def labels(cls, v: dict) -> dict:
+        out = {**COLOR_LABELS, **{k: str(x).strip()[:30] for k, x in v.items()}}
+        return {k: x or COLOR_LABELS[k] for k, x in out.items()}
 
     @model_validator(mode="after")
     def hours_order(self):
@@ -59,12 +74,14 @@ class Prefs(BaseModel):
 class UserOut(ORM):
     id: int
     email: str
+    name: str
     timezone: str
     prefs: Prefs
 
 
 class SettingsIn(BaseModel):
     email: str | None = Field(None, pattern=EMAIL, max_length=320)
+    name: str | None = Field(None, max_length=60)
     timezone: str | None = None
     prefs: dict | None = None  # частичное обновление: только изменённые ключи
 
@@ -102,6 +119,10 @@ class TagOut(ORM):
     color: str
 
 
+class TagWithCount(TagOut):
+    count: int  # сколько заметок с этим тегом (без корзины)
+
+
 # --- заметки ---
 class NoteFields(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=500)
@@ -115,6 +136,8 @@ class NoteFields(BaseModel):
     important: bool | None = None
     urgent: bool | None = None
     focus_on: date | None = None  # день, когда заметка — одно из трёх главных дел
+    color: Color | None = None
+    triaged: bool | None = None  # разобрана — лежит в одном из блоков доски «Задачи»
 
     @field_validator("title")
     @classmethod
@@ -139,6 +162,7 @@ class NoteIn(NoteFields):
     tag_ids: list[int] = []
     important: bool = False
     urgent: bool = False
+    triaged: bool = False
 
     @model_validator(mode="after")
     def until_needs_freq(self):
@@ -165,6 +189,8 @@ class NoteOut(ORM):
     important: bool
     urgent: bool
     focus_on: date | None
+    color: str | None
+    triaged: bool
     version: int
     created_at: datetime
     updated_at: datetime
@@ -193,6 +219,7 @@ class OccurrenceOut(BaseModel):
     tags: list[TagOut]
     important: bool
     urgent: bool
+    color: str | None
     version: int
 
 
@@ -208,7 +235,8 @@ class Upcoming(BaseModel):
     now: datetime
     focus: list[NoteOut]  # «Фокус дня» — до трёх главных дел на сегодня
     today: list[OccurrenceOut]
-    week: list[OccurrenceOut]
+    tomorrow: list[OccurrenceOut]
+    week: list[OccurrenceOut]  # после завтра и до +7 дней
     past: list[OccurrenceOut]
 
 
@@ -235,3 +263,14 @@ class NotificationOut(ORM):
     occurrence_start: datetime | None
     fired_at: datetime
     shown_at: datetime | None
+
+
+class NoteEventOut(BaseModel):
+    """Одна запись истории: кто, когда, откуда, что (поле: [было, стало])."""
+
+    id: int
+    at: datetime
+    action: str
+    changes: dict
+    device: str
+    user_name: str
