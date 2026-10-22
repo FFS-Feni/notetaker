@@ -185,6 +185,14 @@ async def test_trash_purged_after_30_days(client, sql):
     assert await sql.fetchval("SELECT count(*) FROM notes") == 0
 
 
+async def test_expired_sessions_cleaned(client, sql):
+    assert await sql.fetchval("SELECT count(*) FROM sessions") == 1
+    await worker.purge_trash(T0 + timedelta(days=29))
+    assert await sql.fetchval("SELECT count(*) FROM sessions") == 1  # ещё действует
+    await worker.purge_trash(T0 + timedelta(days=31))
+    assert await sql.fetchval("SELECT count(*) FROM sessions") == 0
+
+
 async def test_upcoming_today_week_past(client, clock):
     # T0 = 18:00 по Бишкеку
     await make_note(client, start=T0 + 60 * MIN, title="Сегодня")

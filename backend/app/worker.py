@@ -18,7 +18,7 @@ from app import clock
 from app.config import settings
 from app.db import Session
 from app.events import emit
-from app.models import EmailOutbox, Note, Notification, OccurrenceOverride, ReminderJob, User
+from app.models import EmailOutbox, Note, Notification, OccurrenceOverride, ReminderJob, User, UserSession
 from app.planner import replan
 
 log = logging.getLogger("worker")
@@ -158,6 +158,8 @@ async def purge_trash(now: datetime) -> int:
         ).all()
         for user_id in {r.user_id for r in rows}:
             await emit(db, user_id, "notes")
+        # Заодно — просроченные сессии входа: они уже не работают, просто занимают место.
+        await db.execute(delete(UserSession).where(UserSession.expires_at < now))
     return len(rows)
 
 
