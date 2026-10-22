@@ -31,7 +31,10 @@ export function Login() {
       <Paper withBorder p="xl" radius="md" w={380}>
         <form onSubmit={submit}>
           <Stack>
-            <Title order={3}>{mode === "login" ? "Вход в Notetaker" : "Регистрация"}</Title>
+            <div>
+              <Title order={3}>{mode === "login" ? "Вход в Notetaker" : "Регистрация"}</Title>
+              <Text size="sm" c="dimmed">Заметки с календарём, повторами и напоминаниями</Text>
+            </div>
             {error && <Alert color="red">{error}</Alert>}
             <TextInput label="Почта" type="email" required value={email} onChange={(e) => setEmail(e.currentTarget.value)} />
             <PasswordInput label="Пароль" description={mode === "register" ? "Не короче 6 символов" : undefined} required value={password} onChange={(e) => setPassword(e.currentTarget.value)} />

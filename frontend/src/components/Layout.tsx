@@ -86,7 +86,7 @@ export function Layout({ children }: { children: ReactNode }) {
               </Popover.Dropdown>
             </Popover>
             <Text size="sm" c="dimmed" visibleFrom="sm">{user.email}</Text>
-            <Button size="xs" variant="default" onClick={logout}>Выйти</Button>
+            <Button size="xs" variant="default" onClick={logout} visibleFrom="sm">Выйти</Button>
           </Group>
         </Group>
       </AppShell.Header>
@@ -94,6 +94,10 @@ export function Layout({ children }: { children: ReactNode }) {
         {LINKS.map(([to, label]) => (
           <MNavLink key={to} component={NavLink} to={to} label={label} active={pathname.startsWith(to)} onClick={close} />
         ))}
+        <Stack gap={4} mt="auto" hiddenFrom="sm">
+          <Text size="xs" c="dimmed" px="sm">{user.email}</Text>
+          <MNavLink label="Выйти" onClick={logout} />
+        </Stack>
       </AppShell.Navbar>
       <AppShell.Main>{children}</AppShell.Main>
     </AppShell>

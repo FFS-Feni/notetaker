@@ -1,4 +1,35 @@
-/* Неактивные заметки в календаре — бледные. */
-.nt-inactive { opacity: 0.45; }
-.fc { --fc-today-bg-color: rgba(92, 176, 238, 0.12); }
+/* FullCalendar в цветах Mantine — одинаково читается в светлой и тёмной теме. */
+.fc {
+  --fc-border-color: var(--mantine-color-default-border);
+  --fc-page-bg-color: var(--mantine-color-body);
+  --fc-neutral-bg-color: var(--mantine-color-default-hover);
+  --fc-today-bg-color: color-mix(in srgb, var(--mantine-color-blue-filled) 12%, transparent);
+  --fc-now-indicator-color: var(--mantine-color-red-6);
+  --fc-button-bg-color: var(--mantine-color-default);
+  --fc-button-border-color: var(--mantine-color-default-border);
+  --fc-button-text-color: var(--mantine-color-text);
+  --fc-button-hover-bg-color: var(--mantine-color-default-hover);
+  --fc-button-hover-border-color: var(--mantine-color-default-border);
+  --fc-button-active-bg-color: var(--mantine-color-blue-filled);
+  --fc-button-active-border-color: var(--mantine-color-blue-filled);
+  font-family: inherit;
+}
+.fc .fc-button { font-size: 0.875rem; font-weight: 500; box-shadow: none !important; }
+.fc .fc-button-primary:not(:disabled).fc-button-active { color: var(--mantine-color-white); }
+.fc .fc-toolbar-title { font-size: 1.35rem; font-weight: 700; }
+.fc .fc-col-header-cell { background: var(--mantine-color-default-hover); font-weight: 600; }
+.fc a.fc-daygrid-day-number, .fc a.fc-col-header-cell-cushion { color: inherit; text-decoration: none; }
 .fc .fc-event { cursor: pointer; }
+
+/* Неактивные — контур и зачёркивание вместо прозрачности: читаются в обеих темах. */
+.fc .nt-inactive { background: transparent !important; }
+.fc .nt-inactive, .fc .nt-inactive .fc-event-main, .fc .nt-inactive .fc-event-title, .fc .nt-inactive .fc-event-time {
+  color: var(--mantine-color-dimmed) !important;
+  text-decoration: line-through;
+}
+
+@media (max-width: 48em) {
+  .fc .fc-toolbar { gap: 8px; }
+  .fc .fc-toolbar-title { font-size: 1.05rem; }
+  .fc .fc-button { padding: 0.3em 0.55em; }
+}

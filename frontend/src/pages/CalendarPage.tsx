@@ -5,6 +5,7 @@ import luxonPlugin from "@fullcalendar/luxon3";
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import { Paper } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DateTime } from "luxon";
@@ -15,6 +16,7 @@ import { useApp } from "../context";
 export function CalendarPage() {
   const { user, openEditor } = useApp();
   const qc = useQueryClient();
+  const mobile = useMediaQuery("(max-width: 48em)", window.matchMedia("(max-width: 48em)").matches, { getInitialValueInEffect: false });
   const [range, setRange] = useState<{ from: string; to: string } | null>(null);
   // Сервер отдаёт вхождения только видимого периода — повторы разворачиваются там же.
   const occ = useQuery({
@@ -48,8 +50,13 @@ export function CalendarPage() {
         plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, luxonPlugin]}
         locale={ruLocale}
         timeZone={user.timezone}
-        initialView="dayGridMonth"
-        headerToolbar={{ left: "prev,next today", center: "title", right: "dayGridMonth,timeGridWeek,timeGridDay" }}
+        // На телефоне месяц нечитаем — открываем день, переключатель видов уходит вниз.
+        initialView={mobile ? "timeGridDay" : "dayGridMonth"}
+        headerToolbar={mobile
+          ? { left: "prev,next", center: "title", right: "today" }
+          : { left: "prev,next today", center: "title", right: "dayGridMonth,timeGridWeek,timeGridDay" }}
+        footerToolbar={mobile ? { center: "dayGridMonth,timeGridWeek,timeGridDay" } : undefined}
+        scrollTime="08:00:00"
         height="auto"
         dayMaxEvents={4}
         eventDisplay="block"
@@ -65,7 +72,7 @@ export function CalendarPage() {
           title: o.title + (o.freq !== "none" ? " ↻" : ""),
           start: o.start,
           allDay: false,
-          backgroundColor: o.tags[0]?.color ?? "#5cb0ee",
+          backgroundColor: o.is_active ? (o.tags[0]?.color ?? "#5cb0ee") : "transparent",
           borderColor: o.tags[0]?.color ?? "#5cb0ee",
           textColor: "#111",
           classNames: o.is_active ? [] : ["nt-inactive"],

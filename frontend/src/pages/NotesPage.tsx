@@ -69,14 +69,14 @@ export function NotesPage() {
   return (
     <Stack gap="sm">
       <Group gap="sm" align="flex-end" wrap="wrap">
-        <TextInput label="Поиск по заголовку и тексту" placeholder="например, банк" value={q} onChange={(e) => setQ(e.currentTarget.value)} w={240} />
-        <MultiSelect label="Теги" placeholder="любые" data={(tags.data ?? []).map((t) => ({ value: String(t.id), label: t.name }))} value={tagIds} onChange={setTagIds} w={220} clearable />
+        <TextInput label="Поиск по заголовку и тексту" placeholder="например, банк" value={q} onChange={(e) => setQ(e.currentTarget.value)} w={{ base: "100%", sm: 240 }} />
+        <MultiSelect label="Теги" placeholder="любые" data={(tags.data ?? []).map((t) => ({ value: String(t.id), label: t.name }))} value={tagIds} onChange={setTagIds} w={{ base: "100%", sm: 220 }} clearable />
         <div>
           <Text size="sm" fw={500} mb={2}>Статус</Text>
           <SegmentedControl value={status} onChange={setStatus} data={[{ value: "all", label: "Все" }, { value: "active", label: "Активные" }, { value: "inactive", label: "Неактивные" }]} />
         </div>
-        <DatePickerInput type="range" label="Период" placeholder="за всё время" value={period} onChange={(v) => setPeriod(v as [string | null, string | null])} clearable valueFormat="DD.MM.YYYY" w={230} />
-        <Select label="Сортировка" value={sort} onChange={(v) => v && setSort(v as keyof typeof SORTS)} data={Object.entries(SORTS).map(([value, s]) => ({ value, label: s[2] }))} w={190} allowDeselect={false} />
+        <DatePickerInput type="range" label="Период" placeholder="за всё время" value={period} onChange={(v) => setPeriod(v as [string | null, string | null])} clearable valueFormat="DD.MM.YYYY" w={{ base: "100%", sm: 230 }} />
+        <Select label="Сортировка" value={sort} onChange={(v) => v && setSort(v as keyof typeof SORTS)} data={Object.entries(SORTS).map(([value, s]) => ({ value, label: s[2] }))} w={{ base: "100%", sm: 190 }} allowDeselect={false} />
         <Button onClick={() => openEditor({ kind: "new" })}>Новая заметка</Button>
       </Group>
       <Text size="sm" c="dimmed">Найдено: {total}{notes.isFetching ? " · загрузка…" : ""}</Text>
