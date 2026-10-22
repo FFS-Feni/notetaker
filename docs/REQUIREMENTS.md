@@ -1,49 +1,49 @@
 # Требования → как сделано → чем доказано
 
-Статус: ⏳ запланировано, 🛠 в работе, ✅ сделано и доказано, ⚠️ сделано частично (см. примечание), ❌ не сделано.
-Колонка «Доказательство» заполняется по мере работы: имя теста или сценарий из README.
+✅ сделано и доказано тестом или проверкой · ⚠️ сделано с оговоркой (см. README, «Ограничения») · ❌ не делали.
+Тесты backend — `backend/tests/` (`make test`), браузерные — `e2e/tests/two-tabs.spec.js` (`make e2e`).
 
 ## Общие требования
-| # | Требование | Как | Доказательство | Статус |
+| # | Требование | Как | Доказательство | |
 |---|---|---|---|---|
-| 1 | Клиент-сервер, отдельные backend и frontend | FastAPI + React, общаются по HTTP/WS | docker-compose.yml | ⏳ |
-| 2 | Backend Python/Go/Node | Python 3.13 + FastAPI | — | ⏳ |
-| 3 | Frontend Vue/React | React 18 + TS | — | ⏳ |
-| 4 | Реляционная СУБД | PostgreSQL 17 | — | ⏳ |
-| 5 | Вход | Почта + пароль, cookie-сессия, демо-аккаунт | tests/test_auth | ⏳ |
-| 6–7 | Промпты / лог решений | docs/DECISIONS.md, docs/WORKLOG.md, экспорт сессии | — | 🛠 |
-| 8–9 | Предварительные требования, быстрый локальный запуск | README: Docker + `make up` | чистый клон → `make up` | ⏳ |
-| 10 | Заглушки внешних сервисов | Mailpit вместо почты | http://localhost:8025 | ⏳ |
-| 11 | Две вкладки одновременно | WebSocket + LISTEN/NOTIFY | e2e/two-tabs | ⏳ |
-| 12 | Честное описание состояния | README, раздел «Состояние» | — | ⏳ |
-| 13 | Доказуемость | pytest + Playwright + этот файл | `make test`, `make e2e` | ⏳ |
+| 1 | Клиент-сервер, отдельные backend и frontend | FastAPI (:8000) + React (:5173), общаются по HTTP и WebSocket | `docker-compose.yml`: отдельные сервисы | ✅ |
+| 2 | Backend Python/Go/Node | Python 3.12 + FastAPI | — | ✅ |
+| 3 | Frontend Vue/React | React 19 + TypeScript | — | ✅ |
+| 4 | Реляционная СУБД | PostgreSQL 17, схема — миграцией Alembic | `test_schema.py` (13 тестов) | ✅ |
+| 5 | Вход | Почта + пароль (argon2), cookie-сессия, демо-аккаунт | `test_auth_flow`, `test_other_user_cannot_see_my_note` | ✅ |
+| 6–7 | Промпты / лог решений, работа с агентом | `docs/DECISIONS.md`, `docs/WORKLOG.md`, коммиты с Co-Authored-By | — | ✅ |
+| 8–9 | Предварительные требования, быстрый запуск | README; `make up` (≈15 с при собранных образах) | проверено: e2e 5/5 на Docker-версии | ✅ |
+| 10 | Заглушки внешних сервисов | Mailpit вместо почты | e2e: письмо проверяется через API Mailpit | ✅ |
+| 11 | Две вкладки одновременно | WebSocket + LISTEN/NOTIFY | все 5 e2e — две вкладки | ✅ |
+| 12 | Честное описание состояния | README: «Состояние», «Ограничения», «Чего не делали» | — | ✅ |
+| 13 | Доказуемость | 47 тестов backend + 5 e2e + `make demo` | — | ✅ |
 
 ## Функции
-| Функция | Как | Доказательство | Статус |
+| Функция | Как | Доказательство | |
 |---|---|---|---|
-| Заметки: заголовок, текст, дата-время, теги, статус; CRUD, (де)активация | `notes`, `note_tags` | test_notes | ⏳ |
-| Корзина и восстановление | `deleted_at` | test_trash | ⏳ |
-| Теги: создание, переименование, удаление, цвет, несколько у заметки | `tags` | test_tags | ⏳ |
-| Повторы: день/неделя/месяц, дата окончания | `recurrence.py` | test_recurrence | ⏳ |
-| Изменить/удалить одно вхождение | `occurrence_overrides` | test_overrides | ⏳ |
-| Напоминания: одно или несколько (10 мин, час, день) | `notes.reminders` + `reminder_jobs` | test_planner | ⏳ |
-| Календарь: месяц, неделя, день; клик; перетаскивание | FullCalendar | e2e/calendar | ⏳ |
-| Список: поиск, фильтры (теги, статус, период), сортировка | серверный поиск, pg_trgm | test_notes_list | ⏳ |
-| «Ближайшее»: сегодня, неделя, прошедшие активные | `/api/upcoming` | test_upcoming | ⏳ |
-| Настройки: почта, часовой пояс | `/api/settings` | test_settings | ⏳ |
+| Заметки: поля, создание, правка, удаление, (де)активация | `notes`, `/api/notes` | `test_note_versions_and_conflict`, `test_note_validation` | ✅ |
+| Корзина и восстановление | `deleted_at`, `/api/trash` | `test_trash_restore_delete_forever` | ✅ |
+| Теги: создание, переименование, удаление, цвет, несколько у заметки | `tags`, `note_tags` | `test_tags_crud_and_unique_name`, `test_tag_*` в схеме | ✅ |
+| Повторы: день / неделя / месяц, дата окончания | правило в заметке, развёртка `recurrence.py` | `test_recurrence.py` (5 тестов) | ✅ |
+| Изменить / удалить одно вхождение | `occurrence_overrides` | `test_edit_one_occurrence_only` | ✅ |
+| Напоминания: несколько (10 мин, час, день) | `notes.reminders` + `reminder_jobs` | `test_several_reminders_per_note` | ✅ |
+| Календарь: месяц, неделя, день; клик; перетаскивание | FullCalendar + `/api/occurrences` | e2e «перетаскивание в календаре» | ✅ |
+| Список: поиск, фильтры (теги, статус, период), сортировки | серверный поиск, `pg_trgm`, курсор | `test_list_search_filters_sort_and_cursor` | ✅ |
+| «Ближайшее»: сегодня, неделя, прошедшие активные | `/api/upcoming` + таймер на клиенте | `test_upcoming_today_week_past`, e2e | ⚠️ прошедшие — за 7 дней |
+| Настройки: почта, часовой пояс | `/api/settings` | `test_settings_timezone_validation` | ✅ |
 
 ## Ожидаемое поведение
-| Поведение | Как | Доказательство | Статус |
+| Поведение | Как | Доказательство | |
 |---|---|---|---|
-| В момент «время − интервал» у активной заметки письмо, ровно одно | диспетчер + outbox, UNIQUE, SKIP LOCKED | test_dispatch_exactly_once (2 диспетчера параллельно) | ⏳ |
-| Уведомление в тот же момент во всех вкладках, после F5 не всплывает | WS + `notifications.shown_at` | e2e/reminder-popup | ⏳ |
-| Деактивированная не напоминает; реактивация до срока — вернулись, после — не досылаются | `replan`, только `fire_at > now` | test_deactivate_* | ⏳ |
-| Смена времени/интервала переносит; удаление отменяет; восстановление возвращает будущие | `replan` в транзакции | test_replan_* | ⏳ |
-| Корзина очищается через 30 дней | worker janitor | test_trash_purge | ⏳ |
-| Повтор напоминает о каждом вхождении; «начиная с этого дня» не трогает прошлое | горизонт 7 дней, разрез серии | test_recurring_reminders, test_split_series | ⏳ |
-| Две вкладки/устройства видят одно и то же, календарь, список и «Ближайшее» обновляются | WS события → invalidate | e2e/two-tabs | ⏳ |
-| Одновременная правка не теряется молча | `version` + 409 + баннер | test_conflict_409, e2e/conflict | ⏳ |
-| Время в поясе пользователя; смена пояса меняет отображение, не момент напоминания | UTC в БД, пояс только на экране | test_tz_change_keeps_fire_at | ⏳ |
-| Прошедшая заметка уходит в «прошедшие» без обновления | таймер на клиенте | e2e/upcoming-past | ⏳ |
-| Поиск и фильтры по всем заметкам; тысячи заметок без задержек | сервер + курсор + виртуализация | test_list_perf (5000 заметок) | ⏳ |
-| После перезапуска данные и напоминания на месте; политика для просроченных | Postgres volume; см. ARCHITECTURE §4.2 | test_downtime_policy + ручной сценарий в README | ⏳ |
+| В момент «время − интервал» у активной заметки — письмо, ровно одно | диспетчер раз в секунду, `SKIP LOCKED`, outbox с уникальным ключом | `test_one_email_exactly_at_fire_time`, `test_two_workers_in_parallel_send_one_email`, e2e (одно письмо в Mailpit) | ⚠️ см. «Ограничения»: падение между SMTP и записью статуса |
+| Уведомление в тот же момент во всех вкладках, после F5 не всплывает | текст в событии WebSocket + `shown_at` | e2e «напоминание всплывает во всех вкладках…», `test_notification_shown_once` | ✅ |
+| Деактивация, реактивация до срока / после срока | `replan()` + перепроверка в диспетчере | `test_deactivated_note_does_not_remind`, `test_reactivated_before_deadline_reminders_return`, `test_reactivated_after_deadline_past_reminders_not_sent`, `test_race_deactivated_after_pick_is_still_not_sent` | ✅ |
+| Перенос времени/интервала; удаление отменяет; восстановление возвращает будущие | `replan()` в транзакции изменения | `test_changing_time_or_offset_moves_reminders`, `test_delete_cancels_restore_returns_only_future` | ✅ |
+| Корзина очищается через 30 дней | worker раз в час | `test_trash_purged_after_30_days` | ✅ |
+| Повтор напоминает о каждом вхождении; «начиная с этого дня» не трогает прошлое | горизонт 7 дней + продление; разрез серии | `test_recurring_reminds_every_occurrence_and_horizon_extends`, `test_change_from_this_day_keeps_past` | ✅ |
+| Две вкладки / устройства видят одно и то же; календарь, список, «Ближайшее» обновляются | `NOTIFY` → LISTEN → WebSocket → перезапрос | e2e «правка в одной вкладке сразу видна в другой»; событие доходит за ~15 мс | ✅ |
+| Одновременная правка не теряется молча | версия, 409, баннер в редакторе | `test_simultaneous_edits_one_wins_other_gets_409`, e2e «одновременная правка» | ✅ |
+| Время в поясе пользователя; смена пояса не меняет момент напоминания | UTC в базе, пояс — на экране | `test_timezone_change_keeps_reminder_moment` | ✅ |
+| Прошедшая заметка уходит в «прошедшие» без обновления | таймер на ближайшее начало + сверка раз в минуту | e2e «Ближайшее: наступило время…», `test_upcoming_today_week_past` | ✅ |
+| Поиск и фильтры по всем заметкам; тысячи без задержек | сервер, индексы, курсор, виртуализация | `test_5000_notes_list_and_search_fast` (≈5 мс в среднем) | ✅ |
+| После перезапуска всё на месте; политика простоя | Postgres на volume; просрочено > 1 мин: событие впереди — «с опозданием», прошло — пропуск + сводка | `test_downtime_policy`; ручная проверка `docker compose restart` | ✅ |
