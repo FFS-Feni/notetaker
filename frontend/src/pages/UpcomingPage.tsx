@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, occPath, type Note, type Occurrence, type Section, type Upcoming } from "../api";
 import { ColorDot } from "../components/ColorPicker";
 import { PageHeader } from "../components/PageHeader";
+import { QuickAdd } from "../components/QuickAdd";
 import { TaskCard } from "../components/TaskCard";
 import { useApp } from "../context";
 import { setFocus, todayIn } from "../priority";
@@ -80,6 +81,7 @@ export function UpcomingPage() {
       task={o}
       when={fmt(o.start, user.timezone, key === "today" || key === "tomorrow" ? "HH:mm" : "ccc d MMM · HH:mm")}
       onClick={() => openEditor(o.freq === "none" ? { kind: "note", id: o.note_id } : { kind: "occ", occ: o })}
+      onChecklist={(items) => run(() => api(`/notes/${o.note_id}`, { method: "PATCH", body: { version: o.version, checklist: items } }))}
       actions={
         <>
           <ColorDot value={o.color} onChange={(c) => recolor(o.note_id, o.version, c)} />
@@ -112,6 +114,7 @@ export function UpcomingPage() {
         </Chip.Group>
       </PageHeader>
 
+      <Group hiddenFrom="sm"><QuickAdd /></Group>
       {shown.includes("focus") && (
         <Paper withBorder radius="lg" p="md" data-testid="focus" style={{ borderLeft: "5px solid var(--mantine-color-yellow-5)" }}>
           <Group justify="space-between" mb="xs">
@@ -126,6 +129,7 @@ export function UpcomingPage() {
                 task={n}
                 when={fmt(n.start_at, user.timezone, "HH:mm")}
                 onClick={() => openEditor({ kind: "note", id: n.id })}
+                onChecklist={(items) => run(() => api(`/notes/${n.id}`, { method: "PATCH", body: { version: n.version, checklist: items } }))}
                 actions={
                   <>
                     <Button size="compact-xs" variant={n.is_active ? "light" : "default"} color="teal"

@@ -73,6 +73,7 @@ export type Note = {
   focus_on: string | null;
   color: string | null;
   triaged: boolean;
+  checklist: CheckItem[];
   version: number;
   created_at: string;
   updated_at: string;
@@ -93,7 +94,13 @@ export type Occurrence = {
   important: boolean;
   urgent: boolean;
   color: string | null;
+  checklist: CheckItem[];
   version: number;
+};
+export type CheckItem = { text: string; done: boolean };
+export type QuickParsed = {
+  title: string; start_at: string; freq: Freq; reminders: number[]; important: boolean; urgent: boolean;
+  color: string | null; tag_ids: number[]; new_tags: string[]; hints: string[];
 };
 export type Quadrant = { total: number; items: Note[] };
 export type Matrix = { do: Quadrant; plan: Quadrant; delegate: Quadrant; drop: Quadrant };

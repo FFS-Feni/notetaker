@@ -1,6 +1,7 @@
 import { Badge, Group, Paper, Text } from "@mantine/core";
 import type { ReactNode } from "react";
-import type { Tag } from "../api";
+import type { CheckItem, Tag } from "../api";
+import { ChecklistBadge } from "./Checklist";
 import { taskHex } from "../colors";
 import { useApp } from "../context";
 
@@ -13,12 +14,14 @@ export type CardTask = {
   urgent?: boolean;
   is_active: boolean;
   freq?: string;
+  checklist?: CheckItem[];
 };
 
 // Единая карточка задачи для всех вкладок: цветная полоса слева, заголовок, когда, метки, действия справа.
 export function TaskCard({
-  task, when, actions, footer, onClick, draggableId, dense, testId,
+  task, when, actions, footer, onClick, draggableId, dense, testId, onChecklist,
 }: {
+  onChecklist?: (items: CheckItem[]) => void;
   task: CardTask;
   when?: string;
   actions?: ReactNode;
@@ -53,6 +56,7 @@ export function TaskCard({
           {!dense && task.body ? <Text size="xs" c="dimmed" lineClamp={1}>{task.body}</Text> : null}
           <Group gap={4} mt={3} wrap="wrap">
             {when && <Text size="xs" c="dimmed" fw={500}>{when}{task.freq && task.freq !== "none" ? " · ↻" : ""}</Text>}
+            <ChecklistBadge items={task.checklist ?? []} onChange={onChecklist} />
             {user.prefs.priorities && task.urgent && <Badge size="xs" color="orange" variant="outline">срочно</Badge>}
             {task.tags.map((t) => <Badge key={t.id} size="xs" variant="dot" color={t.color}>{t.name}</Badge>)}
           </Group>

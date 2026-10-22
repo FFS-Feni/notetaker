@@ -132,6 +132,7 @@ export function NotesPage() {
                   task={n}
                   when={fmt(n.start_at, user.timezone, "ccc d MMM yyyy · HH:mm") + (n.freq !== "none" ? ` · ${FREQ_LABEL[n.freq].toLowerCase()}` : "")}
                   onClick={() => openEditor({ kind: "note", id: n.id })}
+                  onChecklist={(items) => patch(n, { checklist: items })}
                   actions={
                     <>
                       <ColorDot value={n.color} onChange={(c) => patch(n, { color: c })} />

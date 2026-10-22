@@ -18,8 +18,9 @@ import { notifications } from "@mantine/notifications";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DateTime } from "luxon";
 import { useEffect, useMemo, useState } from "react";
-import { api, ApiError, occPath, type Freq, type Note, type Tag } from "../api";
+import { api, ApiError, occPath, type CheckItem, type Freq, type Note, type Tag } from "../api";
 import { useApp, type EditorTarget } from "../context";
+import { ChecklistEditor } from "./Checklist";
 import { ColorPicker } from "./ColorPicker";
 import { NoteHistory } from "./NoteHistory";
 import { FREQ_LABEL, fmt, fromWall, REMINDER_LABEL, toWall } from "../time";
@@ -36,6 +37,7 @@ type Form = {
   important: boolean;
   urgent: boolean;
   color: string | null;
+  checklist: CheckItem[];
 };
 type Scope = "this" | "following" | "all";
 
@@ -56,7 +58,7 @@ function formFrom(note: Note | undefined, target: EditorTarget, tz: string, defa
       target.kind === "new" && target.start
         ? target.start
         : DateTime.now().setZone(tz).plus({ hours: 1 }).startOf("hour").toFormat("yyyy-MM-dd HH:mm:ss");
-    return { title: "", body: "", start, is_active: true, freq: "none", until: null, reminders: defaultReminders.map(String), tag_ids: [], important: false, urgent: false, color: null };
+    return { title: "", body: "", start, is_active: true, freq: "none", until: null, reminders: defaultReminders.map(String), tag_ids: [], important: false, urgent: false, color: null, checklist: [] };
   }
   const occ = target.kind === "occ" ? target.occ : null;
   return {
@@ -71,6 +73,7 @@ function formFrom(note: Note | undefined, target: EditorTarget, tz: string, defa
     important: note.important,
     urgent: note.urgent,
     color: note.color,
+    checklist: note.checklist ?? [],
   };
 }
 
@@ -171,6 +174,7 @@ export function NoteEditor({ target, onClose }: { target: EditorTarget; onClose:
       important: form.important,
       urgent: form.urgent,
       color: form.color,
+      checklist: form.checklist.filter((i) => i.text.trim()),
     };
     if (target.kind === "new")
       return run(() => api("/notes", { method: "POST", body: { ...series, start_at } }), "Заметка создана");
@@ -282,6 +286,10 @@ export function NoteEditor({ target, onClose }: { target: EditorTarget; onClose:
                 />
               )}
             </Group>
+            <div>
+              <Text size="sm" fw={500} mb={6}>Чек-лист</Text>
+              <ChecklistEditor value={form.checklist} onChange={(v) => set("checklist", v)} />
+            </div>
             <div>
               <Text size="sm" fw={500} mb={6}>Цвет</Text>
               <ColorPicker value={form.color} onChange={(v) => set("color", v)} />

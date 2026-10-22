@@ -89,6 +89,7 @@ export function TasksPage() {
       task={n}
       dense
       draggableId={n.id}
+      onChecklist={(items) => patch(n, { checklist: items })}
       when={fmt(n.start_at, user.timezone, "d MMM, HH:mm")}
       onClick={() => openEditor({ kind: "note", id: n.id })}
       actions={

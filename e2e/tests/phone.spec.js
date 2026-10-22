@@ -19,7 +19,7 @@ test("телефон: создать заметку, увидеть в кале�
   await page.goto("/tasks");
   const card = page.getByTestId("inbox").getByTestId("task-card").filter({ hasText: title });
   await card.getByRole("button", { name: "Переместить" }).click();
-  await page.getByRole("menuitem", { name: "Сделать сейчас" }).click();
+  await page.getByRole("menuitem", { name: "Важные и срочные" }).click();
   await expect(page.getByTestId("quadrant-do").getByText(title)).toBeVisible();
 
   // Настройки помещаются в ширину экрана, переключатель работает.

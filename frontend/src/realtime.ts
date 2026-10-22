@@ -9,13 +9,16 @@ const AFFECTS: Record<string, string[]> = {
   settings: ["me", "occurrences", "upcoming"],
   notification: ["notifications"],
   notification_shown: ["notifications"],
+  notification_handled: ["notifications"],
 };
 
-export function useRealtime(onNotification: (n: AppNotification) => void) {
+export function useRealtime(onNotification: (n: AppNotification) => void, onHandled?: (id: number) => void) {
   const qc = useQueryClient();
   const [online, setOnline] = useState(false);
   const notify = useRef(onNotification);
   notify.current = onNotification;
+  const handled = useRef(onHandled);
+  handled.current = onHandled;
 
   useEffect(() => {
     let ws: WebSocket | null = null;
@@ -40,6 +43,7 @@ export function useRealtime(onNotification: (n: AppNotification) => void) {
         const keys = AFFECTS[msg.type] ?? [];
         qc.invalidateQueries({ predicate: (q) => keys.includes(q.queryKey[0] as string) });
         if (msg.type === "notification") notify.current(msg);
+        if (msg.type === "notification_handled") handled.current?.(msg.id); // отложили или отметили в другой вкладке
       };
       ws.onclose = () => {
         setOnline(false);

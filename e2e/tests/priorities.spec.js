@@ -64,3 +64,30 @@ test("цвет и история: выбрал цвет в списке — в �
   await expect(history.getByText(/Цвет: .*Работа/)).toBeVisible();
   await expect(history.getByText(/Chrome|Firefox|Safari/).first()).toBeVisible();
 });
+
+test("быстрый ввод одной строкой: дата, время, тег и приоритет распознаются и видны до создания", async ({ context, page }) => {
+  await newUser(context);
+  await page.goto("/upcoming");
+  const input = page.getByRole("textbox", { name: "Быстрая заметка" }).first();
+  await input.fill("завтра в 9 позвонить маме #семья !важно");
+  await expect(page.getByText("Позвонить маме").first()).toBeVisible();
+  await expect(page.locator(".mantine-Popover-dropdown").getByText("#семья (новый)")).toBeVisible();
+  await input.press("Enter");
+  await expect(page.getByText("Заметка создана")).toBeVisible();
+  const notes = (await (await context.request.get("/api/notes?q=маме")).json()).items;
+  expect(notes.map((n) => [n.title, n.important, n.tags[0].name])).toEqual([["Позвонить маме", true, "семья"]]);
+});
+
+test("«напомнить позже» из уведомления: закрывается во всех вкладках, создаётся новое напоминание", async ({ context }) => {
+  await newUser(context);
+  const title = unique("Звонок клиенту");
+  const [a, b] = [await context.newPage(), await context.newPage()];
+  await a.goto("/upcoming");
+  await b.goto("/notes");
+  const note = await createNote(context, { title, start_at: inSeconds(600 + 3), reminders: [10] });
+  for (const p of [a, b]) await expect(p.getByRole("alert").filter({ hasText: title })).toBeVisible({ timeout: 15_000 });
+  await a.getByRole("alert").filter({ hasText: title }).getByRole("button", { name: "через 10 мин" }).click();
+  for (const p of [a, b]) await expect(p.getByRole("alert").filter({ hasText: title })).toHaveCount(0, { timeout: 5000 });
+  const history = await (await context.request.get(`/api/notes/${note.id}`)).json();
+  expect(history.is_active).toBe(true);
+});

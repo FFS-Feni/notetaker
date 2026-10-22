@@ -18,6 +18,7 @@ import {
 import { useDisclosure, useHotkeys } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { DateTime } from "luxon";
 import { useEffect, useRef, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router";
 import { api, type AppNotification, type TrashItem, type Upcoming } from "../api";
@@ -25,6 +26,7 @@ import { useApp } from "../context";
 import { useRealtime } from "../realtime";
 import { fmt } from "../time";
 import { Icon, type IconName } from "./icons";
+import { QuickAdd } from "./QuickAdd";
 
 type Link = { to: string; label: string; icon: IconName; count?: number; alert?: boolean };
 
@@ -44,14 +46,15 @@ export function Layout({ children }: { children: ReactNode }) {
       notifications.show({
         id: `n${n.id}`,
         title: n.title,
-        message: n.body,
+        message: n.kind === "reminder" ? <ReminderActions n={n} tz={user.timezone} /> : n.body,
         color: n.kind === "missed" ? "orange" : "indigo",
         icon: <Icon name="bell" size={16} />,
-        autoClose: 20_000,
+        autoClose: 30_000,
       });
     api(`/notifications/${n.id}/shown`, { method: "POST" }).catch(() => {});
   };
-  const online = useRealtime(show);
+  // Отложили или отметили «готово» в другой вкладке — уведомление закрывается и здесь.
+  const online = useRealtime(show, (id) => notifications.hide(`n${id}`));
 
   // Сработавшие, пока вкладок не было: показать один раз при открытии.
   useEffect(() => {
@@ -106,6 +109,7 @@ export function Layout({ children }: { children: ReactNode }) {
               <Badge color={online ? "teal" : "red"} variant="dot" visibleFrom="sm">{online ? "онлайн" : "нет связи"}</Badge>
             </Tooltip>
           </Group>
+          <Group visibleFrom="sm" style={{ flex: 1, maxWidth: 620 }} mx="md"><QuickAdd /></Group>
           <Group gap="xs" wrap="nowrap">
             <Tooltip label={<>Новая заметка <Kbd size="xs">N</Kbd></>}>
               <Button leftSection={<Icon name="plus" size={16} />} onClick={() => openEditor({ kind: "new" })} visibleFrom="sm">
@@ -177,5 +181,25 @@ export function Layout({ children }: { children: ReactNode }) {
       </AppShell.Navbar>
       <AppShell.Main>{children}</AppShell.Main>
     </AppShell>
+  );
+}
+
+// Кнопки во всплывающем напоминании: отложить на 10 минут / час / до завтра 9:00 или сразу отметить «готово».
+function ReminderActions({ n, tz }: { n: AppNotification; tz: string }) {
+  const act = (path: string, body?: object) =>
+    api(`/notifications/${n.id}/${path}`, { method: "POST", body }).catch((e) => notifications.show({ color: "red", message: (e as Error).message }));
+  const now = DateTime.now().setZone(tz);
+  const tomorrow9 = Math.round(now.plus({ days: 1 }).set({ hour: 9, minute: 0 }).diff(now, "minutes").minutes);
+  return (
+    <Stack gap={6}>
+      <Text size="sm">{n.body}</Text>
+      <Group gap={4}>
+        <Text size="xs" c="dimmed">Напомнить:</Text>
+        <Button size="compact-xs" variant="light" onClick={() => act("snooze", { minutes: 10 })}>через 10 мин</Button>
+        <Button size="compact-xs" variant="light" onClick={() => act("snooze", { minutes: 60 })}>через час</Button>
+        <Button size="compact-xs" variant="light" onClick={() => act("snooze", { minutes: tomorrow9 })}>завтра в 9</Button>
+        <Button size="compact-xs" color="teal" onClick={() => act("done")}>✓ Готово</Button>
+      </Group>
+    </Stack>
   );
 }

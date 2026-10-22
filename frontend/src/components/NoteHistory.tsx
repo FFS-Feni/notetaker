@@ -13,7 +13,7 @@ const ACTION: Record<string, string> = {
 const FIELD: Record<string, string> = {
   title: "Заголовок", body: "Текст", start_at: "Дата и время", is_active: "Статус", freq: "Повтор", until: "Повтор до",
   reminders: "Напоминания", important: "Важно", urgent: "Срочно", focus_on: "Фокус дня", color: "Цвет",
-  triaged: "Доска задач", tags: "Теги", occurrence: "Вхождение",
+  triaged: "Доска задач", tags: "Теги", occurrence: "Вхождение", checklist: "Чек-лист",
 };
 
 export function NoteHistory({ noteId }: { noteId: string }) {
@@ -25,6 +25,10 @@ export function NoteHistory({ noteId }: { noteId: string }) {
     if (field === "important" || field === "urgent" || field === "triaged") return v ? "да" : "нет";
     if (field === "color") return colorLabel(user, String(v));
     if (field === "freq") return FREQ_LABEL[v as keyof typeof FREQ_LABEL] ?? String(v);
+    if (field === "checklist") {
+      const items = v as { done: boolean }[];
+      return `${items.filter((i) => i.done).length}/${items.length}`;
+    }
     if (field === "reminders") return (v as number[]).map((m) => REMINDER_LABEL[m]).join(", ");
     if (Array.isArray(v)) return v.join(", ");
     if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T/.test(v)) return fmt(v, user.timezone, "d MMM yyyy, HH:mm");
